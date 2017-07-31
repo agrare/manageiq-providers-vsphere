@@ -22,7 +22,85 @@ class ProviderOperations < Sinatra::Application
   end
 
   post "/vms/:ref/stop" do
+    with_provider_vm { |vm| vm.PowerOffVM_Task }
+  end
+
+  post "/vms/:ref/reset" do
+    with_provider_vm { |vm| vm.ResetVM_Task }
+  end
+
+  post "/vms/:ref/shutdown_guest" do
     with_provider_vm { |vm| vm.ShutdownGuest }
+  end
+
+  post "/vms/:ref/reboot_guest" do
+    with_provider_vm { |vm| vm.RebootGuest }
+  end
+
+  post "/vms/:ref/unregister" do
+    with_provider_vm { |vm| vm.UnregisterVM }
+  end
+
+  post "/vms/:ref/mark_as_template" do
+    with_provider_vm { |vm| vm.MarkAsTemplate }
+  end
+
+  post "/vms/:ref/mark_as_vm" do
+    with_provider_vm do |vm|
+      connection = vm._connection
+
+      pool = RbVmomi::VIM::ResourcePool(connection, params[:pool])
+      host = RbVmomi::VIM::Host(connection, params[:host]) if params[:host]
+
+      vm.MarkAsVirtualMachine(pool: pool, host: host)
+    end
+  end
+
+  post "/vms/:ref/migrate" do
+    with_provider_vm do |vm|
+      connection = vm._connection
+
+      pool     = RbVmomi::VIM::ResourcePool(connection, params[:pool])  if params[:pool]
+      host     = RbVmomi::VIM::HostSystem(connection, params[:host])    if params[:host]
+      priority = RbVmomi::VIM::VirtualMachineMovePriority(params[:priority])
+      state    = RbVmomi::VIM::VirtualMachinePowerState(params[:state]) if params[:state]
+
+      vm.MigrateVM_Task(
+        pool:     pool,
+        host:     host,
+        priority: priority,
+        state:    state
+      )
+    end
+  end
+
+  post "/vms/:ref/relocate" do
+  end
+
+  post "/vms/:ref/clone" do
+  end
+
+  # TODO: vm_connect_all
+  # TODO: vm_disconnect_all
+  # TODO: vm_connect_cdrom
+  # TODO: vm_disconnect_cdrom
+  # TODO: vm_connect_floppy
+  # TODO: vm_disconnect_floppy
+  # TODO: vm_connect_disconnect_cdrom
+  # TODO: vm_connect_disconnect_floppy
+  # TODO: vm_connect_disconnect_all_connectable_devices
+  # TODO: vm_connect_disconnect_specified_connectable_devices
+
+  post "/vms/:ref/create_snapshot" do
+  end
+
+  post "/vms/:ref/remove_snapshot" do
+  end
+
+  post "/vms/:ref/remove_all_snapshots" do
+  end
+
+  post "/vms/:ref/revert_to_snapshot" do
   end
 
   private
@@ -33,8 +111,7 @@ class ProviderOperations < Sinatra::Application
 
   def with_provider_vm
     with_provider_connection do |vim|
-      vm = RbVmomi::VIM::VirtualMachine.new(vim, params[:ref])
-      yield vm
+      yield RbVmomi::VIM::VirtualMachine(vim, params[:ref])
     end
   end
 
