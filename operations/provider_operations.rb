@@ -104,6 +104,13 @@ class ProviderOperations < Sinatra::Application
   post "/vms/:ref/revert_to_snapshot" do
   end
 
+  post "/vms/:ref/rename" do
+    with_provider_vm do |vm|
+      name = params[:name]
+      vm.Rename_Task(newName: name)
+    end
+  end
+
   private
 
   def log
