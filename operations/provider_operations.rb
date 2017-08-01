@@ -9,7 +9,8 @@ class ProviderOperations < Sinatra::Application
     @username = ENV["PROVIDER_USERNAME"]
     @password = ENV["PROVIDER_PASSWORD"]
 
-    $vim = ConnectionPool.new(size: 3, timeout: 30) { vim_connect }
+    $vim = ConnectionPool.new(size: 2, timeout: 30) { vim_connect }
+
     super
   end
 
@@ -105,6 +106,10 @@ class ProviderOperations < Sinatra::Application
 
   private
 
+  def log
+    @logger ||= Logger.new(STDOUT)
+  end
+
   def with_provider_connection
     $vim.with { |vim| yield vim }
   end
@@ -116,14 +121,19 @@ class ProviderOperations < Sinatra::Application
   end
 
   def vim_connect
-    require "rbvmomi/vim"
+    log.info("Connecting to #{username}@#{hostname}...")
 
-    RbVmomi::VIM.connect(
+    require "rbvmomi/vim"
+    vim = RbVmomi::VIM.connect(
       host:     hostname, 
       user:     username,
       password: password,
       ssl:      true,
       insecure: true
     )
+
+    log.info("Connecting to #{username}@#{hostname}...Complete")
+
+    vim
   end
 end
