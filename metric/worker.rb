@@ -67,6 +67,7 @@ def all_vms(conn)
 
   result = conn.propertyCollector.RetrieveProperties(:specSet => [filter_spec])
   result.to_a.collect do |r|
+    next if r.propSet.first.val == "poweredOff"
     r.obj
   end.compact
 end
