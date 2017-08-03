@@ -6,7 +6,13 @@ require 'collector'
 
 def main args
   collector = Collector.new(args[:ems_id], args[:hostname], args[:user], args[:password])
-  collector.run
+  thread = Thread.new { collector.run }
+  begin
+    loop { sleep 1 }
+  rescue Interrupt
+    collector.stop
+    thread.join
+  end
 end
 
 def parse_args
