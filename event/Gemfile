@@ -1,0 +1,5 @@
+source 'https://rubygems.org'
+
+gem "rbvmomi"
+gem "trollop"
+gem "manageiq-messaging", :git => "https://github.com/ManageIQ/manageiq-messaging"
