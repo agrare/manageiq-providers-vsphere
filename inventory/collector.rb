@@ -23,7 +23,6 @@ class Collector
 
     ManageIQ::Messaging.logger = Logger.new(STDOUT)
     @queue_client   = ManageIQ::Messaging::Client.open(
-      :Stomp,
       :host       => "localhost",
       :port       => 61616,
       :password   => "smartvm",
