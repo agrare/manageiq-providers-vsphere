@@ -2,7 +2,7 @@ require "trollop"
 require_relative "metrics_collector"
 
 def main args
-  collector = MetricsCollector.new(args[:hostname], args[:user], args[:password])
+  collector = MetricsCollector.new(args)
 
   thread = Thread.new { collector.run }
 
@@ -16,18 +16,30 @@ end
 
 def parse_args
   args = Trollop.options do
-    opt :hostname, "hostname", :type => :string
-    opt :user,     "username", :type => :string
-    opt :password, "password", :type => :string
+    opt :ems_hostname, "ems hostname", :type => :string
+    opt :ems_user,     "ems username", :type => :string
+    opt :ems_password, "ems password", :type => :string
+
+    opt :q_hostname, "queue hostname", :type => :string
+    opt :q_port,     "queue port",     :type => :integer
+    opt :q_user,     "queue username", :type => :string
+    opt :q_password, "queue password", :type => :string
   end
 
-  args[:hostname] ||= ENV["EMS_HOSTNAME"]
-  args[:user]     ||= ENV["EMS_USERNAME"]
-  args[:password] ||= ENV["EMS_PASSWORD"]
+  args[:ems_hostname] ||= ENV["EMS_HOSTNAME"]
+  args[:ems_user]     ||= ENV["EMS_USERNAME"]
+  args[:ems_password] ||= ENV["EMS_PASSWORD"]
 
-  raise Trollop::CommandlineError, "--hostname required" if args[:hostname].nil?
-  raise Trollop::CommandlineError, "--user required"     if args[:user].nil?
-  raise Trollop::CommandlineError, "--password required" if args[:password].nil?
+  args[:q_hostname]   ||= ENV["QUEUE_HOSTNAME"] || "localhost"
+  args[:q_port]       ||= ENV["QUEUE_PORT"]     || "61616"
+  args[:q_user]       ||= ENV["QUEUE_USER"]     || "admin"
+  args[:q_password]   ||= ENV["QUEUE_PASSWORD"] || "smartvm"
+
+  args[:q_port] = args[:q_port].to_i
+
+  # %i(ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
+  #   raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
+  # end
 
   args
 end

@@ -1,0 +1,198 @@
+require "logger"
+require "csv"
+require 'rbvmomi/vim'
+
+class Ems
+  # @option options :host       hostname
+  # @option options :user       username
+  # @option options :passsword  password
+  def initialize(options = {})
+    @options = options
+    @options[:ssl] = true
+    @options[:insecure] = true
+  end
+
+
+  def connection
+    @connection ||= connect
+  end
+
+  def connect
+    # RbVmomi::VIM.connect(@options)
+    log.info("Connecting to #{@options[:host]}...")
+
+    conn = RbVmomi::VIM.new(vim_opts).tap do |vim|
+      vim.rev = vim.serviceContent.about.apiVersion
+
+      log.info("Logging in to #{@options[:user]}@#{@options[:host]}...")
+      vim.serviceContent.sessionManager.Login(
+        :userName => @options[:user],
+        :password => @options[:password],
+      )
+      log.info("Logging in to #{@options[:user]}@#{@options[:host]}...Complete")
+    end
+
+    log.info("Connected...")
+    conn
+  end
+
+  def log
+    @logger ||= Logger.new(STDOUT)
+  end
+
+  def perf_counter_key(counter)
+    group  = counter.groupInfo.key.downcase
+    name   = counter.nameInfo.key.downcase
+    rollup = counter.rollupType.downcase
+    stats  = counter.statsType.downcase
+
+    "#{group}_#{name}_#{stats}_#{rollup}".to_sym
+  end
+
+  def perf_counter_info
+    log.info("Retrieving perf counters...")
+
+    spec_set = [
+      RbVmomi::VIM.PropertyFilterSpec(
+        :objectSet => [
+          RbVmomi::VIM.ObjectSpec(
+            :obj => connection.serviceContent.perfManager,
+          )
+        ],
+        :propSet   => [
+          RbVmomi::VIM.PropertySpec(
+            :type    => connection.serviceContent.perfManager.class.wsdl_name,
+            :pathSet => ["perfCounter"]
+          )
+        ],
+      )
+    ]
+    options = RbVmomi::VIM.RetrieveOptions()
+
+    result = connection.propertyCollector.RetrievePropertiesEx(
+      :specSet => spec_set, :options => options
+    )
+
+    return if result.nil? || result.objects.nil?
+
+    object_content = result.objects.detect { |oc| oc.obj == connection.serviceContent.perfManager }
+    return if object_content.nil?
+
+    perf_counters = object_content.propSet.to_a.detect { |prop| prop.name == "perfCounter" }.val
+
+    log.info("Retrieving perf counters...Complete #{perf_counters.size}")
+    perf_counters
+  end
+
+  def perf_query(perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
+    log.info("Collecting performance counters...")
+
+    format = RbVmomi::VIM.PerfFormat(format)
+
+    metrics = perf_counters.map do |counter|
+      RbVmomi::VIM::PerfMetricId(
+        :counterId => counter.key,
+        :instance  => ""
+      )
+    end
+
+    all_metrics = []
+    entity_metrics = entities.each_slice(250) do |entity_set|
+      perf_query_spec_set = entity_set.collect do |entity|
+        RbVmomi::VIM::PerfQuerySpec(
+          :entity     => entity,
+          :intervalId => interval,
+          :format     => format,
+          :metricId   => metrics,
+          :startTime  => start_time,
+          :endTime    => end_time,
+          :maxSample  => max_sample,
+        )
+      end
+
+      log.info("Querying perf for #{entity_set.count} VMs...")
+      entity_metrics = connection.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
+      log.info("Querying perf for #{entity_set.count} VMs...Complete")
+
+      all_metrics.concat(entity_metrics)
+    end
+
+    log.info("Collecting performance counters...Complete #{all_metrics.size}")
+
+    all_metrics
+  end
+
+  def all_powered_on_vms
+    all_vms(["runtime.powerState"]).collect do |vm, props|
+      power_state = props.to_a.detect { |p| p.name == "runtime.powerState" }.val.to_s
+      next unless power_state == "poweredOn"
+      vm
+    end.compact
+  end
+
+  def all_vms(path_set = [])
+    log.info("Retrieving vms...")
+    filter_spec = RbVmomi::VIM.PropertyFilterSpec(
+      :objectSet => [
+        :obj => connection.rootFolder,
+        :selectSet => [
+          RbVmomi::VIM.TraversalSpec(
+            :name => 'tsFolder',
+            :type => 'Folder',
+            :path => 'childEntity',
+            :skip => false,
+            :selectSet => [
+              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder'),
+              RbVmomi::VIM.SelectionSpec(:name => 'tsDatacenterVmFolder'),
+            ]
+          ),
+          RbVmomi::VIM.TraversalSpec(
+            :name => 'tsDatacenterVmFolder',
+            :type => 'Datacenter',
+            :path => 'vmFolder',
+            :skip => false,
+            :selectSet => [
+              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')
+            ]
+          )
+        ],
+      ],
+      :propSet => [
+        RbVmomi::VIM.PropertySpec(
+          :type => "VirtualMachine",
+          :pathSet => path_set,
+        )
+      ]
+    )
+
+    result = connection.propertyCollector.RetrieveProperties(:specSet => [filter_spec])
+    result.to_a.collect { |r| [r.obj, r.propSet] }
+  end
+
+  def perf_counters_by_name
+    perf_counter_info.to_a.each_with_object({}) do |counter, hash|
+      hash[perf_counter_key(counter)] = counter
+    end
+  end
+
+  def counters_to_collect(names)
+    hash = perf_counters_by_name
+    names.map do |counter_name|
+      hash[counter_name]
+    end
+  end
+
+  # private
+
+  def vim_opts
+    {
+      :ns       => "urn:vim25",
+      :host     => @options[:host],
+      :ssl      => true,
+      :insecure => true,
+      :path     => "/sdk",
+      :port     => 443,
+      :rev      => "6.5",
+    }
+  end
+end

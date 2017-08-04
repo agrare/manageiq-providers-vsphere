@@ -2,35 +2,32 @@ require "logger"
 require "csv"
 require "rbvmomi/vim"
 
-class MetricsCollector
-  attr_reader :hostname, :username, :password, :collect_interval, :exit_requested
-  def initialize(hostname, username, password, collect_interval = 60)
-    @hostname = hostname
-    @username = username
-    @password = password
+require_relative 'ems'
+require_relative 'miq_queue'
 
-    @collect_interval = collect_interval
+class MetricsCollector
+  attr_reader :collect_interval, :exit_requested, :options
+  attr_reader :ems
+  def initialize(options)
+    @options  = options
+
+    @ems = Ems.new(ems_options)
+    @queue = MiqQueue.new(q_options)
+
+    @collect_interval = options[:collect_interval] || 60
     @exit_requested = false
   end
 
   def run
-    conn = connect(hostname, username, password)
+    conn = ems.connection
 
-    # At startup request the list of all counters from the PerformanceManager
-    perf_counters_by_name = {}
-    perf_counter_info(conn).to_a.each do |counter|
-      perf_counters_by_name[perf_counter_key(counter)] = counter
-    end
-
-    perf_counters_to_collect = METRIC_CAPTURE_COUNTERS.collect do |counter_name|
-      perf_counters_by_name[counter_name]
-    end
+    perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
 
     start_time = nil
 
     until exit_requested
-      vms = get_all_powered_on_vms(conn)
-      entity_metrics = perf_query(conn, perf_counters_to_collect, vms, format: "csv", start_time: start_time)
+      vms = ems.all_powered_on_vms
+      entity_metrics = ems.perf_query(perf_counters_to_collect, vms, format: "csv", start_time: start_time)
       start_time = Time.now
 
       sleep(collect_interval)
@@ -70,165 +67,24 @@ class MetricsCollector
     :disk_queuelatency_absolute_average
   ].freeze
 
-  def connect(host, username, password)
-    log.info("Connecting to #{host}...")
-
-    opts = {
-      :ns       => "urn:vim25",
-      :host     => host,
-      :ssl      => true,
-      :insecure => true,
-      :path     => "/sdk",
-      :port     => 443,
-      :rev      => "6.5",
-    }
-
-    require 'rbvmomi/vim'
-
-    conn = RbVmomi::VIM.new(opts).tap do |vim|
-      vim.rev = vim.serviceContent.about.apiVersion
-
-      log.info("Logging in to #{username}@#{host}...")
-      vim.serviceContent.sessionManager.Login(
-        :userName => username,
-        :password => password,
-      )
-      log.info("Logging in to #{username}@#{host}...Complete")
-    end
-
-    log.info("Connected...")
-    conn
-  end
-
   def log
     @logger ||= Logger.new(STDOUT)
   end
 
-  def perf_counter_key(counter)
-    group  = counter.groupInfo.key.downcase
-    name   = counter.nameInfo.key.downcase
-    rollup = counter.rollupType.downcase
-    stats  = counter.statsType.downcase
-
-    "#{group}_#{name}_#{stats}_#{rollup}".to_sym
+  def ems_options
+    {
+      :host     => @options[:ems_hostname],
+      :user     => @options[:ems_user],
+      :password => @options[:ems_password],
+    }
   end
 
-  def perf_counter_info(vim)
-    log.info("Retrieving perf counters...")
-
-    spec_set = [
-      RbVmomi::VIM.PropertyFilterSpec(
-        :objectSet => [
-          RbVmomi::VIM.ObjectSpec(
-            :obj => vim.serviceContent.perfManager,
-          )
-        ],
-        :propSet   => [
-          RbVmomi::VIM.PropertySpec(
-            :type    => vim.serviceContent.perfManager.class.wsdl_name,
-            :pathSet => ["perfCounter"]
-          )
-        ],
-      )
-    ]
-    options = RbVmomi::VIM.RetrieveOptions()
-
-    result = vim.propertyCollector.RetrievePropertiesEx(
-      :specSet => spec_set, :options => options
-    )
-
-    return if result.nil? || result.objects.nil?
-
-    object_content = result.objects.detect { |oc| oc.obj == vim.serviceContent.perfManager }
-    return if object_content.nil?
-
-    perf_counters = object_content.propSet.to_a.detect { |prop| prop.name == "perfCounter" }.val
-
-    log.info("Retrieving perf counters...Complete")
-    perf_counters
-  end
-
-  def perf_query(vim, perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
-    log.info("Collecting performance counters...")
-
-    format = RbVmomi::VIM.PerfFormat(format)
-
-    metrics = perf_counters.map do |counter|
-      RbVmomi::VIM::PerfMetricId(
-        :counterId => counter.key,
-        :instance  => ""
-      )
-    end
-
-    all_metrics = []
-    entity_metrics = entities.each_slice(250) do |entity_set|
-      perf_query_spec_set = entity_set.collect do |entity|
-        RbVmomi::VIM::PerfQuerySpec(
-          :entity     => entity,
-          :intervalId => interval,
-          :format     => format,
-          :metricId   => metrics,
-          :startTime  => start_time,
-          :endTime    => end_time,
-          :maxSample  => max_sample,
-        )
-      end
-
-      log.info("Querying perf for #{entity_set.count} VMs...")
-      entity_metrics = vim.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
-      log.info("Querying perf for #{entity_set.count} VMs...Complete")
-
-      all_metrics.concat(entity_metrics)
-    end
-
-    log.info("Collecting performance counters...Complete")
-
-    all_metrics
-  end
-
-  def get_all_powered_on_vms(conn)
-    get_all_vms(conn, ["runtime.powerState"]).collect do |vm, props|
-      power_state = props.to_a.detect { |p| p.name == "runtime.powerState" }.val.to_s
-      next unless power_state == "poweredOn"
-      vm
-    end.compact
-  end
-
-  def get_all_vms(conn, path_set = [])
-    filter_spec = RbVmomi::VIM.PropertyFilterSpec(
-      :objectSet => [
-        :obj => conn.rootFolder,
-        :selectSet => [
-          RbVmomi::VIM.TraversalSpec(
-            :name => 'tsFolder',
-            :type => 'Folder',
-            :path => 'childEntity',
-            :skip => false,
-            :selectSet => [
-              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder'),
-              RbVmomi::VIM.SelectionSpec(:name => 'tsDatacenterVmFolder'),
-            ]
-          ),
-          RbVmomi::VIM.TraversalSpec(
-            :name => 'tsDatacenterVmFolder',
-            :type => 'Datacenter',
-            :path => 'vmFolder',
-            :skip => false,
-            :selectSet => [
-              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')
-            ]
-          )
-        ],
-      ],
-      :propSet => [
-        RbVmomi::VIM.PropertySpec(
-          :type => "VirtualMachine",
-          :pathSet => path_set,
-        )
-      ]
-    )
-
-    result = conn.propertyCollector.RetrieveProperties(:specSet => [filter_spec])
-    result.to_a.collect { |r| [r.obj, r.propSet] }
+  def q_options
+    {
+      :host     => @options[:q_hostname],
+      :port     => @options[:q_port].to_i,
+      :username => @options[:q_user],
+      :password => @options[:q_password],
+    }
   end
 end
