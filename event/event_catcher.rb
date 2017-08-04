@@ -1,8 +1,10 @@
 require "logger"
+require "manageiq-messaging"
 
 class EventCatcher
-  attr_reader :hostname, :username, :password, :exit_requested
-  def initialize(hostname, username, password)
+  attr_reader :ems_id, :hostname, :username, :password, :exit_requested, :queue_client
+  def initialize(ems_id, hostname, username, password)
+    @ems_id   = ems_id
     @hostname = hostname
     @username = username
     @password = password
@@ -40,7 +42,21 @@ class EventCatcher
 
       version = update_set.version
 
-      log.info("Received events")
+      property_filter_update = update_set.filterSet.to_a.detect { |filter_update| filter_update.filter == property_filter }
+      next if property_filter_update.nil?
+
+      object_update_set = property_filter_update.objectSet
+      next if object_update_set.nil?
+
+      object_update = object_update_set.detect { |update| update.obj == event_history_collector }
+      next if object_update.nil? || object_update.kind != "modify"
+      next if object_update.changeSet.nil? || object_update.changeSet.empty?
+
+      events = object_update.changeSet.collect do |prop_change|
+        next unless prop_change.name =~ /latestPage.*/
+
+        Array(prop_change.val).collect { |event| parse_event(event) }
+      end.compact
     end
   ensure
     property_filter.DestroyPropertyFilter unless property_filter.nil?
@@ -107,5 +123,26 @@ class EventCatcher
     )
 
     vim.propertyCollector.CreateFilter(:spec => spec, :partialUpdates => true)
+  end
+
+  def parse_event(event)
+    event_type = event.class.wsdl_name
+    is_task = event_type == "TaskEvent"
+
+    result = {
+      :ems_id     => ems_id,
+      :event_type => event_type,
+      :chain_id   => event.chainId,
+      :is_task    => is_task,
+      :source     => "VC",
+      :message    => event.fullFormattedMessage,
+      :timestamp  => event.createdTime,
+      :username   => event.userName,
+      :full_data  => event,
+    }
+
+    log.info("event: #{event_type} #{event.fullFormattedMessage}")
+
+    result
   end
 end
