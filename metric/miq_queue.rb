@@ -1,3 +1,5 @@
+require "manageiq-messaging"
+
 class MiqQueue
   # @option options :host       hostname
   # @option options :port       port number (typically 61616)
@@ -10,14 +12,12 @@ class MiqQueue
   end
 
   def save(metrics)
-    # puts metrics.inspect
-    puts metrics.count
-    # client.publish_message(
-    #   :service  => 'inventory',
-    ##  :affinity => 'ems_vmware1',
-    #   :message  => 'save_metrics',
-    #   :payload  => metrics
-    # )
+    connection.publish_message(
+      :service  => 'metrics',
+      #:affinity => 'ems_vmware1',
+      :message  => 'save_metrics',
+      :payload  => metrics
+    )
   end
 
 

@@ -6,8 +6,8 @@ require_relative 'ems'
 require_relative 'miq_queue'
 
 class MetricsCollector
-  attr_reader :collect_interval, :exit_requested, :options
-  attr_reader :ems
+  attr_reader :collect_interval, :exit_requested, :query_size, :options
+  attr_reader :ems, :queue
   def initialize(options)
     @options  = options
 
@@ -15,6 +15,7 @@ class MetricsCollector
     @queue = MiqQueue.new(q_options)
 
     @collect_interval = options[:collect_interval] || 60
+    @query_size = options[:perf_query_size] || 250
     @exit_requested = false
   end
 
@@ -22,12 +23,28 @@ class MetricsCollector
     conn = ems.connection
 
     perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
-
     start_time = nil
 
     until exit_requested
-      vms = ems.all_powered_on_vms
-      entity_metrics = ems.perf_query(perf_counters_to_collect, vms, format: "csv", start_time: start_time)
+      log.info("Collecting performance counters...")
+
+      perf_query_options = {
+        :format     => "csv",
+        :start_time => start_time
+      }
+
+      ems.all_powered_on_vms.each_slice(query_size) do |vms|
+        entity_metrics = ems.perf_query(perf_counters_to_collect, vms, perf_query_options)
+
+        metrics_payload = entity_metrics.collect do |metric|
+          ems.parse_metric(metric)
+        end
+
+        queue.save(metrics_payload)
+      end
+
+      log.info("Collecting performance counters...Complete")
+
       start_time = Time.now
 
       sleep(collect_interval)

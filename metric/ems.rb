@@ -1,6 +1,6 @@
 require "logger"
 require "csv"
-require 'rbvmomi/vim'
+require "rbvmomi/vim"
 
 class Ems
   # @option options :host       hostname
@@ -18,18 +18,14 @@ class Ems
   end
 
   def connect
-    # RbVmomi::VIM.connect(@options)
     log.info("Connecting to #{@options[:host]}...")
 
     conn = RbVmomi::VIM.new(vim_opts).tap do |vim|
       vim.rev = vim.serviceContent.about.apiVersion
-
-      log.info("Logging in to #{@options[:user]}@#{@options[:host]}...")
       vim.serviceContent.sessionManager.Login(
         :userName => @options[:user],
         :password => @options[:password],
       )
-      log.info("Logging in to #{@options[:user]}@#{@options[:host]}...Complete")
     end
 
     log.info("Connected...")
@@ -80,12 +76,12 @@ class Ems
 
     perf_counters = object_content.propSet.to_a.detect { |prop| prop.name == "perfCounter" }.val
 
-    log.info("Retrieving perf counters...Complete #{perf_counters.size}")
+    log.info("Retrieving perf counters...Complete - Count: [#{perf_counters.size}]")
     perf_counters
   end
 
   def perf_query(perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
-    log.info("Collecting performance counters...")
+    log.info("Querying perf for #{entities.count} VMs...")
 
     format = RbVmomi::VIM.PerfFormat(format)
 
@@ -96,30 +92,23 @@ class Ems
       )
     end
 
-    all_metrics = []
-    entity_metrics = entities.each_slice(250) do |entity_set|
-      perf_query_spec_set = entity_set.collect do |entity|
-        RbVmomi::VIM::PerfQuerySpec(
-          :entity     => entity,
-          :intervalId => interval,
-          :format     => format,
-          :metricId   => metrics,
-          :startTime  => start_time,
-          :endTime    => end_time,
-          :maxSample  => max_sample,
-        )
-      end
-
-      log.info("Querying perf for #{entity_set.count} VMs...")
-      entity_metrics = connection.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
-      log.info("Querying perf for #{entity_set.count} VMs...Complete")
-
-      all_metrics.concat(entity_metrics)
+    perf_query_spec_set = entities.collect do |entity|
+      RbVmomi::VIM::PerfQuerySpec(
+        :entity     => entity,
+        :intervalId => interval,
+        :format     => format,
+        :metricId   => metrics,
+        :startTime  => start_time,
+        :endTime    => end_time,
+        :maxSample  => max_sample,
+      )
     end
 
-    log.info("Collecting performance counters...Complete #{all_metrics.size}")
+    entity_metrics = connection.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
 
-    all_metrics
+    log.info("Querying perf for #{entities.count} VMs...Complete")
+
+    entity_metrics
   end
 
   def all_powered_on_vms
@@ -179,6 +168,33 @@ class Ems
     hash = perf_counters_by_name
     names.map do |counter_name|
       hash[counter_name]
+    end
+  end
+
+  def parse_metric(metric)
+    base = {
+      :mor      => metric.entity._ref,
+      :children => []
+    }
+
+    samples = CSV.parse(metric.sampleInfoCSV.to_s).first.to_a
+
+    metric.value.to_a.collect do |value|
+      id = value.id
+      val = CSV.parse(value.value.to_s).first.to_a
+
+      nh = {}.merge!(base)
+      nh[:counter_id] = id.counterId
+      nh[:instance]   = id.instance
+
+      nh[:results] = []
+      samples.each_slice(2).with_index do |(interval, timestamp), i|
+        nh[:interval] ||= interval
+        nh[:results] << timestamp
+        nh[:results] << val[i].to_i
+      end
+
+      nh
     end
   end
 
