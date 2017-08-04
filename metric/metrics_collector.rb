@@ -3,6 +3,7 @@ require "csv"
 require "rbvmomi/vim"
 
 require_relative 'ems'
+require_relative 'miq_queue'
 
 class MetricsCollector
   attr_reader :collect_interval, :exit_requested, :options
@@ -11,6 +12,7 @@ class MetricsCollector
     @options  = options
 
     @ems = Ems.new(ems_options)
+    @queue = MiqQueue.new(q_options)
 
     @collect_interval = options[:collect_interval] || 60
     @exit_requested = false
@@ -74,6 +76,15 @@ class MetricsCollector
       :host     => @options[:ems_hostname],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],
+    }
+  end
+
+  def q_options
+    {
+      :host     => @options[:q_hostname],
+      :port     => @options[:q_port].to_i,
+      :username => @options[:q_user],
+      :password => @options[:q_password],
     }
   end
 end
