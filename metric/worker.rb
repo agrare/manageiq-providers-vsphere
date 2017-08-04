@@ -91,10 +91,8 @@ collector.perf_counter_info.to_a.each do |counter|
   perf_counters_by_name[perf_counter_name] = counter
 end
 
-interval = "20" # Realtime
-
 counters_to_collect = metric_capture_counters.map do |counter_name|
   perf_counters_by_name[counter_name]
 end
 
-metrics = collector.perf_query(counters_to_collect, interval, vms)
+metrics = collector.perf_query(counters_to_collect, vms, format: "csv")

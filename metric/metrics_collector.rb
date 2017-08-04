@@ -14,17 +14,16 @@ class MetricsCollector
   def perf_counter_info
     log.info("Retrieving perf counters...")
 
-    performance_manager = vim.serviceContent.perfManager
     spec_set = [
       RbVmomi::VIM.PropertyFilterSpec(
         :objectSet => [
           RbVmomi::VIM.ObjectSpec(
-            :obj => performance_manager,
+            :obj => vim.serviceContent.perfManager,
           )
         ],
         :propSet   => [
           RbVmomi::VIM.PropertySpec(
-            :type    => performance_manager.class.wsdl_name,
+            :type    => vim.serviceContent.perfManager.class.wsdl_name,
             :pathSet => ["perfCounter"]
           )
         ],
@@ -38,7 +37,7 @@ class MetricsCollector
 
     return if result.nil? || result.objects.nil?
 
-    object_content = result.objects.detect { |oc| oc.obj == performance_manager }
+    object_content = result.objects.detect { |oc| oc.obj == vim.serviceContent.perfManager }
     return if object_content.nil?
 
     perf_counters = object_content.propSet.to_a.detect { |prop| prop.name == "perfCounter" }.val
@@ -47,10 +46,10 @@ class MetricsCollector
     perf_counters
   end
 
-  def perf_query(perf_counters, interval, entities)
-    perf_manager = vim.serviceContent.perfManager
-
+  def perf_query(perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
     log.info("Collecting performance counters...")
+
+    format = RbVmomi::VIM.PerfFormat(format)
 
     metrics = perf_counters.map do |counter|
       RbVmomi::VIM::PerfMetricId(
@@ -60,28 +59,24 @@ class MetricsCollector
     end
 
     all_metrics = []
-    entity_metrics = entities.each_slice(250).collect do |entity_set|
+    entity_metrics = entities.each_slice(250) do |entity_set|
       perf_query_spec_set = entity_set.collect do |entity|
         RbVmomi::VIM::PerfQuerySpec(
           :entity     => entity,
           :intervalId => interval,
-          :format     => RbVmomi::VIM::PerfFormat("csv"),
+          :format     => format,
           :metricId   => metrics,
-          :startTime  => Time.now - 5 * 60
+          :startTime  => start_time,
+          :endTime    => end_time,
+          :maxSample  => max_sample,
         )
       end
 
       log.info("Querying perf for #{entity_set.count} VMs...")
-      entity_metrics = perf_manager.QueryPerf(:querySpec => perf_query_spec_set)
+      entity_metrics = vim.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
       log.info("Querying perf for #{entity_set.count} VMs...Complete")
 
-      entity_metrics.each do |entity_metric|
-        sample_info = CSV.parse(entity_metric.sampleInfoCSV)
-        entity_metric.value.map do |value|
-          metric_value = CSV.parse(value.value)
-          all_metrics << [sample_info.first, metric_value]
-        end
-      end
+      all_metrics.concat(entity_metrics)
     end
 
     log.info("Collecting performance counters...Complete")
