@@ -1,15 +1,18 @@
 $LOAD_PATH.unshift(".")
 
 require 'trollop'
-require 'rbvmomi'
 require 'event_catcher'
 
 def main args
   collector = EventCatcher.new(args[:hostname], args[:user], args[:password])
   thread = Thread.new { collector.run }
   begin
-    loop { sleep 1 }
+    loop do
+      break unless thread.alive?
+      sleep 1
+    end
   rescue Interrupt
+  ensure
     collector.stop
     thread.join
   end
