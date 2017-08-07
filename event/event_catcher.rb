@@ -1,27 +1,25 @@
 require "logger"
 require "manageiq-messaging"
 
+require_relative "miq_queue"
+
 class EventCatcher
-  attr_reader :ems_id, :hostname, :username, :password, :exit_requested, :queue_client
-  def initialize(ems_id, hostname, username, password)
-    @ems_id   = ems_id
-    @hostname = hostname
-    @username = username
-    @password = password
+  attr_reader :options, :ems_id, :exit_requested, :queue
+  def initialize(options)
+    @options = options
+    @ems_id  = options[:ems_id]
+    @queue   = MiqQueue.new(q_options)
 
     @exit_requested = false
+    at_exit { @queue.close }
   end
 
   def run
     until exit_requested
-      vim = connect(hostname, username, password)
-
-      monitor_events(vim)
+      monitor_events
     end
 
     log.info("Exiting...")
-  ensure
-    vim.close unless vim.nil?
   end
 
   def stop
@@ -29,7 +27,9 @@ class EventCatcher
     @exit_requested = true
   end
 
-  def monitor_events(vim)
+  def monitor_events
+    vim = connect(ems_options)
+
     event_history_collector = create_event_history_collector(vim)
     property_filter = create_property_filter(vim, event_history_collector)
 
@@ -46,20 +46,26 @@ class EventCatcher
       next if property_filter_update.nil?
 
       object_update_set = property_filter_update.objectSet
-      next if object_update_set.nil?
 
-      object_update = object_update_set.detect { |update| update.obj == event_history_collector }
-      next if object_update.nil? || object_update.kind != "modify"
-      next if object_update.changeSet.nil? || object_update.changeSet.empty?
+      object_update_set.to_a.each do |object_update|
+        next if object_update.obj != event_history_collector ||
+                object_update.kind != "modify"
 
-      events = object_update.changeSet.collect do |prop_change|
-        next unless prop_change.name =~ /latestPage.*/
+        events = object_update.changeSet.to_a.collect do |prop_change|
+          next unless prop_change.name =~ /latestPage.*/
 
-        Array(prop_change.val).collect { |event| parse_event(event) }
-      end.compact
+          Array(prop_change.val).collect do |event|
+            parse_event(event)
+          end
+        end.flatten.compact
+
+        log.info("Received #{events.count} events")
+        queue.save(events)
+      end
     end
   ensure
     property_filter.DestroyPropertyFilter unless property_filter.nil?
+    vim.close unless vim.nil?
   end
 
   private
@@ -68,8 +74,12 @@ class EventCatcher
     @logger ||= Logger.new(STDOUT)
   end
 
-  def connect(host, username, password)
-    log.info("Connecting to #{host}...")
+  def connect(opts)
+    host     = opts[:host]
+    username = opts[:user]
+    password = opts[:password]
+
+    log.info("Connecting to #{username}@#{host}...")
 
     opts = {
       :ns       => "urn:vim25",
@@ -86,12 +96,10 @@ class EventCatcher
     conn = RbVmomi::VIM.new(opts).tap do |vim|
       vim.rev = vim.serviceContent.about.apiVersion
 
-      log.info("Logging in to #{username}@#{host}...")
       vim.serviceContent.sessionManager.Login(
         :userName => username,
         :password => password,
       )
-      log.info("Logging in to #{username}@#{host}...Complete")
     end
 
     log.info("Connected...")
@@ -138,11 +146,26 @@ class EventCatcher
       :message    => event.fullFormattedMessage,
       :timestamp  => event.createdTime,
       :username   => event.userName,
-      :full_data  => event,
+      # TODO: full event data goes over max message size :full_data  => event,
     }
 
-    log.info("event: #{event_type} #{event.fullFormattedMessage}")
-
     result
+  end
+
+  def ems_options
+    {
+      :host     => @options[:ems_hostname],
+      :user     => @options[:ems_user],
+      :password => @options[:ems_password],
+    }
+  end
+
+  def q_options
+    {
+      :host     => @options[:q_hostname],
+      :port     => @options[:q_port].to_i,
+      :username => @options[:q_user],
+      :password => @options[:q_password],
+    }
   end
 end
