@@ -47,7 +47,7 @@ def parse_args
 
   args[:q_port] = args[:q_port].to_i
 
-  %i(ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
+  %i(ems_id ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
     raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
   end
 

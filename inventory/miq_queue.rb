@@ -16,10 +16,9 @@ class MiqQueue
 
   def save(inventory)
     connection.publish_message(
-      :service  => 'inventory',
-      #:affinity => 'ems_vmware1',
-      :message  => 'save_inventory',
-      :payload  => inventory
+      :service => 'inventory',
+      :message => 'save_inventory',
+      :payload => inventory,
     )
   end
 

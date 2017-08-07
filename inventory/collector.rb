@@ -1,7 +1,5 @@
-require 'yaml'
-require 'logger'
-require 'rbvmomi/vim'
-require 'active_support/core_ext/object/blank'
+require "logger"
+require "active_support/core_ext/object/blank"
 
 require_relative "miq_queue"
 require_relative "parser"
@@ -13,7 +11,7 @@ class Collector
   include InventoryCache
   include PropertyCollector
 
-  attr_reader :ems_id, :hostname, :user, :password, :exit_requested, :queue_client
+  attr_reader :ems_id, :options, :exit_requested, :queue
   def initialize(options)
     @options = options
     @ems_id  = options[:ems_id]
@@ -46,7 +44,7 @@ class Collector
   end
 
   def publish_inventory(inventory)
-    YAML.dump(inventory)
+    queue.save(inventory)
   end
 
   def connect(opts)
