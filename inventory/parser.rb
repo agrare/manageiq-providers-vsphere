@@ -1,11 +1,11 @@
-require "parser/compute_resource"
-require "parser/datacenter"
-require "parser/datastore"
-require "parser/folder"
-require "parser/host_system"
-require "parser/resource_pool"
-require "parser/virtual_machine"
-require "active_support/core_ext/string/inflections"
+require_relative "parser/compute_resource"
+require_relative "parser/datacenter"
+require_relative "parser/datastore"
+require_relative "parser/folder"
+require_relative "parser/host_system"
+require_relative "parser/resource_pool"
+require_relative "parser/virtual_machine"
+require          "active_support/core_ext/string/inflections"
 
 class Parser
   include ComputeResource
@@ -67,7 +67,7 @@ class Parser
       dc_hash[:name] = URI.decode(props["name"])
     end
 
-    parse_datacenter_children(dc_hash, props)
+    # TODO: causing to_yaml exceptions parse_datacenter_children(dc_hash, props)
 
     collections[:ems_folders].build(dc_hash)
   end
@@ -170,7 +170,7 @@ class Parser
 
     parse_resource_pool_memory_allocation(rp_hash, props)
     parse_resource_pool_cpu_allocation(rp_hash, props)
-    parse_resource_pool_children(rp_hash, props)
+    # TODO: causing to_yaml exceptions parse_resource_pool_children(rp_hash, props)
 
     collections[:resource_pools].build(rp_hash)
   end
