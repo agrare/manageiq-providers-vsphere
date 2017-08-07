@@ -1,14 +1,21 @@
-$LOAD_PATH.unshift(".")
-
-require 'trollop'
-require 'rbvmomi'
-require 'collector'
+require "trollop"
+require_relative "collector"
 
 def main args
-  collector = Collector.new(args[:ems_id], args[:hostname], args[:user], args[:password])
-  thread = Thread.new { collector.run }
+  collector = Collector.new(args)
+  log = Logger.new(STDOUT)
+
+  thread = Thread.new do
+    begin
+      collector.run
+    rescue => err
+      log.error(err.message)
+      log.error(err.backtrace.join("\n"))
+    end
+  end
+
   begin
-    loop { sleep 1 }
+    loop { break unless thread.alive?; sleep 1 }
   rescue Interrupt
     collector.stop
     thread.join
@@ -17,21 +24,32 @@ end
 
 def parse_args
   args = Trollop.options do
-    opt :hostname, "hostname", :type => :string
-    opt :user,     "username", :type => :string
-    opt :password, "password", :type => :string
-    opt :ems_id,   "ems-id",   :type => :int
+    opt :ems_id,       "ems id",       :type => :int
+    opt :ems_hostname, "ems hostname", :type => :string
+    opt :ems_user,     "ems username", :type => :string
+    opt :ems_password, "ems password", :type => :string
+
+    opt :q_hostname, "queue hostname", :type => :string
+    opt :q_port,     "queue port",     :type => :integer
+    opt :q_user,     "queue username", :type => :string
+    opt :q_password, "queue password", :type => :string
   end
 
-  args[:hostname] ||= ENV["EMS_HOSTNAME"]
-  args[:user]     ||= ENV["EMS_USERNAME"]
-  args[:password] ||= ENV["EMS_PASSWORD"]
-  args[:ems_id]   ||= ENV["EMS_ID"]
+  args[:ems_id]       ||= ENV["EMS_ID"]
+  args[:ems_hostname] ||= ENV["EMS_HOSTNAME"]
+  args[:ems_user]     ||= ENV["EMS_USERNAME"]
+  args[:ems_password] ||= ENV["EMS_PASSWORD"]
 
-  raise Trollop::CommandlineError, "--hostname required" if args[:hostname].nil?
-  raise Trollop::CommandlineError, "--user required"     if args[:user].nil?
-  raise Trollop::CommandlineError, "--password required" if args[:password].nil?
-  raise Trollop::CommandlineError, "--ems-id required"   if args[:ems_id].nil?
+  args[:q_hostname]   ||= ENV["QUEUE_HOSTNAME"] || "localhost"
+  args[:q_port]       ||= ENV["QUEUE_PORT"]     || "61616"
+  args[:q_user]       ||= ENV["QUEUE_USER"]     || "admin"
+  args[:q_password]   ||= ENV["QUEUE_PASSWORD"] || "smartvm"
+
+  args[:q_port] = args[:q_port].to_i
+
+  %i(ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
+    raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
+  end
 
   args
 end

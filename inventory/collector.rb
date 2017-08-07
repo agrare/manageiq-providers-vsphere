@@ -1,53 +1,37 @@
 require 'yaml'
 require 'logger'
 require 'rbvmomi/vim'
-require 'manageiq-messaging'
-require 'parser'
-require 'collector/inventory_cache'
-require 'collector/property_collector'
-require 'inventory_collections'
 require 'active_support/core_ext/object/blank'
+
+require_relative "miq_queue"
+require_relative "parser"
+require_relative "persister"
+require_relative "collector/inventory_cache"
+require_relative "collector/property_collector"
 
 class Collector
   include InventoryCache
-  include InventoryCollections
   include PropertyCollector
 
   attr_reader :ems_id, :hostname, :user, :password, :exit_requested, :queue_client
-  def initialize(ems_id, hostname, user, password)
-    @ems_id         = ems_id
-    @hostname       = hostname
-    @user           = user
-    @password       = password
-    @exit_requested = false
+  def initialize(options)
+    @options = options
+    @ems_id  = options[:ems_id]
+    @queue   = MiqQueue.new(q_options)
 
-    ManageIQ::Messaging.logger = Logger.new(STDOUT)
-    @queue_client   = ManageIQ::Messaging::Client.open(
-      :host       => "localhost",
-      :port       => 61616,
-      :password   => "smartvm",
-      :username   => "admin",
-      :client_ref => "inventory_vspere_#{ems_id}",
-    )
+    @exit_requested = false
   end
 
   def run
     until exit_requested
-      vim = connect(hostname, user, password)
-
       begin
-        wait_for_updates(vim)
+        wait_for_updates
       rescue RbVmomi::Fault => err
         log.err("Caught exception #{err.message}")
-      ensure
-        vim.serviceContent.sessionManager.Logout
-        vim = nil
       end
     end
 
     log.info("Exiting...")
-  ensure
-    vim.serviceContent.sessionManager.Logout unless vim.nil?
   end
 
   def stop
@@ -62,31 +46,44 @@ class Collector
   end
 
   def publish_inventory(inventory)
+    YAML.dump(inventory)
   end
 
-  def connect(host, username, password)
+  def connect(opts)
+    host     = opts[:host]
+    username = opts[:user]
+    password = opts[:password]
+
     log.info("Connecting to #{username}@#{host}...")
 
-    vim_opts = {
-      :ns       => 'urn:vim25',
+    opts = {
+      :ns       => "urn:vim25",
       :host     => host,
       :ssl      => true,
       :insecure => true,
-      :path     => '/sdk',
+      :path     => "/sdk",
       :port     => 443,
-      :user     => username,
-      :password => password,
+      :rev      => "6.5",
     }
 
     require 'rbvmomi/vim'
 
-    vim = RbVmomi::VIM.connect(vim_opts)
+    conn = RbVmomi::VIM.new(opts).tap do |vim|
+      vim.rev = vim.serviceContent.about.apiVersion
 
-    log.info("Connected")
-    vim
+      vim.serviceContent.sessionManager.Login(
+        :userName => username,
+        :password => password,
+      )
+    end
+
+    log.info("Connected...")
+    conn
   end
 
-  def wait_for_updates(vim)
+  def wait_for_updates
+    vim = connect(ems_options)
+
     property_filter = create_property_filter(vim)
 
     # Return if we don't receive any updates for 60 seconds break
@@ -110,8 +107,8 @@ class Collector
       property_filter_update_set = update_set.filterSet
       next if property_filter_update_set.blank?
 
-      inventory_collections = initialize_inventory_collections
-      parser ||= Parser.new(inventory_collections)
+      persister = Persister.new(ems_id, "ManageIQ::Providers::Vmware::InfraManager::Inventory::Persister")
+      parser ||= Parser.new(persister.collections)
 
       property_filter_update_set.each do |property_filter_update|
         next if property_filter_update.filter != property_filter
@@ -122,10 +119,12 @@ class Collector
         process_object_update_set(object_update_set) { |obj, props| parser.parse(obj, props) }
       end
 
-      next if update_set.truncated
-
-      # TODO: send inventory over artemis
       parser = nil
+
+      inventory = persister.to_raw_data
+      publish_inventory(inventory)
+
+      next if update_set.truncated
 
       next unless initial
 
@@ -134,6 +133,7 @@ class Collector
     end
   ensure
     property_filter.DestroyPropertyFilter unless property_filter.nil?
+    vim.close unless vim.nil?
   end
 
   def process_object_update_set(object_update_set, &block)
@@ -208,5 +208,22 @@ class Collector
 
   def process_property_change_assign(props, property_change)
     props[property_change.name] = property_change.val
+  end
+
+  def ems_options
+    {
+      :host     => @options[:ems_hostname],
+      :user     => @options[:ems_user],
+      :password => @options[:ems_password],
+    }
+  end
+
+  def q_options
+    {
+      :host     => @options[:q_hostname],
+      :port     => @options[:q_port].to_i,
+      :username => @options[:q_user],
+      :password => @options[:q_password],
+    }
   end
 end
