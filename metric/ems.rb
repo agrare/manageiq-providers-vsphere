@@ -86,10 +86,15 @@ class Ems
 
     format = RbVmomi::VIM.PerfFormat(format)
 
-    metrics = perf_counters.map do |counter|
-      RbVmomi::VIM::PerfMetricId(
+    metrics = []
+    perf_counters.each do |counter|
+      metrics << RbVmomi::VIM::PerfMetricId(
         :counterId => counter.key,
         :instance  => ""
+      )
+      metrics << RbVmomi::VIM::PerfMetricId(
+        :counterId => counter.key,
+        :instance  => "*"
       )
     end
 

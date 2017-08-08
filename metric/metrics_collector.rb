@@ -27,6 +27,11 @@ class MetricsCollector
 
     perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
 
+    perf_counters_by_id = {}
+    perf_counters_to_collect.each do |counter|
+      perf_counters_by_id[counter.key] = counter
+    end
+
     start_time = end_time = nil
 
     format   = options[:format]
@@ -57,8 +62,30 @@ class MetricsCollector
         }
 
         metrics_payload = entity_metrics.collect do |metric|
-          counters = [] # TODO
-          counter_values = ems.parse_metric(metric)
+          counters       = {}
+          counter_values = Hash.new { |h, k| h[k] = {} }
+
+          processed_res = ems.parse_metric(metric)
+          processed_res.each do |res|
+            full_vim_key = "#{res[:counter_id]}_#{res[:instance]}"
+
+            counter_info = perf_counters_by_id[res[:counter_id]]
+
+            counters[full_vim_key] = {
+              :counter_key           => ems.perf_counter_key(counter_info),
+              :rollup                => counter_info.rollupType,
+              :precision             => nil,
+              :unit_key              => counter_info.unitInfo.key,
+              :vim_key               => res[:counter_id].to_s,
+              :instance              => res[:instance],
+              :capture_interval      => res[:interval],
+              :capture_interval_name => ems.capture_interval_to_interval_name(res[:interval]),
+            }
+
+            Array(res[:results]).each_slice(2) do |timestamp, value|
+              counter_values[timestamp][full_vim_key] = value
+            end
+          end
 
           metric_payload_base.merge(
             :counters       => counters,
