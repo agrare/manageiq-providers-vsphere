@@ -74,7 +74,7 @@ class MetricsCollector
             counters[full_vim_key] = {
               :counter_key           => ems.perf_counter_key(counter_info),
               :rollup                => counter_info.rollupType,
-              :precision             => nil,
+              :precision             => counter_info.unitInfo.key == "percent" ? 0.1 : 1,
               :unit_key              => counter_info.unitInfo.key,
               :vim_key               => res[:counter_id].to_s,
               :instance              => res[:instance],
