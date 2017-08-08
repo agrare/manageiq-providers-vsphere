@@ -1,7 +1,10 @@
 require "trollop"
 require_relative "metrics_collector"
 
-def main args
+
+def main(args)
+  ManageIQ::Messaging.logger = Logger.new(STDOUT) if args[:debug]
+
   collector = MetricsCollector.new(args)
 
   thread = Thread.new { collector.run }
@@ -24,6 +27,9 @@ def parse_args
     opt :q_port,     "queue port",     :type => :integer
     opt :q_user,     "queue username", :type => :string
     opt :q_password, "queue password", :type => :string
+    opt :debug,      "debug",          :type => :flag
+    opt :timeout,    "queue timeout",  :type => :integer
+    opt :heartbeat,  "queue heartbeat (true, false, value)",  :type => :string
   end
 
   args[:ems_hostname] ||= ENV["EMS_HOSTNAME"]
@@ -36,6 +42,13 @@ def parse_args
   args[:q_password]   ||= ENV["QUEUE_PASSWORD"] || "smartvm"
 
   args[:q_port] = args[:q_port].to_i
+  if args[:heartbeat] == "true"
+    args[:heartbeat] = true
+  elsif args[:heartbeat] == "false"
+    args[:heartbeat] = false
+  elsif args[:heartbeat]
+    args[:heartbeat] = args[:heartbeat].to_i
+  end
 
   # %i(ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
   #   raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
