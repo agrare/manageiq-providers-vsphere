@@ -3,10 +3,12 @@ require "csv"
 require "rbvmomi/vim"
 
 class Ems
+  attr_accessor :id
   # @option options :host       hostname
   # @option options :user       username
   # @option options :passsword  password
-  def initialize(options = {})
+  def initialize(id, options = {})
+    @id = id
     @options = options
     @options[:ssl] = true
     @options[:insecure] = true

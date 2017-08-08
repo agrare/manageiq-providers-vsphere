@@ -1,6 +1,7 @@
 require "trollop"
 require_relative "metrics_collector"
 
+Thread.abort_on_exception = true
 
 def main(args)
   ManageIQ::Messaging.logger = Logger.new(STDOUT) if args[:debug]
@@ -22,6 +23,7 @@ def parse_args
     opt :ems_hostname, "ems hostname", :type => :string
     opt :ems_user,     "ems username", :type => :string
     opt :ems_password, "ems password", :type => :string
+    opt :ems_id,       "ems id",       :type => :string
 
     opt :q_hostname, "queue hostname", :type => :string
     opt :q_port,     "queue port",     :type => :integer
