@@ -17,7 +17,7 @@ class MiqQueue
       {
         :service  => "metrics",
         :message  => "save_metrics",
-        :payload  => metrics
+        :payload  => metric
       }
     end
 
