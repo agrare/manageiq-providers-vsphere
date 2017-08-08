@@ -90,6 +90,7 @@ class MetricsCollector
 
   def ems_options
     {
+      :ems_id   => @options[:ems_id],
       :host     => @options[:ems_hostname],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],

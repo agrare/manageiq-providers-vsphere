@@ -20,6 +20,7 @@ end
 
 def parse_args
   args = Trollop.options do
+    opt :ems_id,       "ems id",       :type => :int
     opt :ems_hostname, "ems hostname", :type => :string
     opt :ems_user,     "ems username", :type => :string
     opt :ems_password, "ems password", :type => :string
@@ -34,6 +35,7 @@ def parse_args
     opt :heartbeat,  "queue heartbeat (true, false, value)",  :type => :string
   end
 
+  args[:ems_id]       ||= ENV["EMS_ID"]
   args[:ems_hostname] ||= ENV["EMS_HOSTNAME"]
   args[:ems_user]     ||= ENV["EMS_USERNAME"]
   args[:ems_password] ||= ENV["EMS_PASSWORD"]
@@ -52,9 +54,9 @@ def parse_args
     args[:heartbeat] = args[:heartbeat].to_i
   end
 
-  # %i(ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
-  #   raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
-  # end
+  %i(ems_id ems_hostname ems_user ems_password).each do |param|
+    raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
+  end
 
   args
 end
