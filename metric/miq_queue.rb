@@ -13,11 +13,15 @@ class MiqQueue
   end
 
   def save(metrics)
-    connection.publish_message(
-      :service  => 'metrics',
-      :message  => 'save_metrics',
-      :payload  => metrics
-    )
+    messages = metrics.collect do |metric|
+      {
+        :service  => "metrics",
+        :message  => "save_metrics",
+        :payload  => metrics
+      }
+    end
+
+    connection.publish_messages(messages)
   end
 
   def connection

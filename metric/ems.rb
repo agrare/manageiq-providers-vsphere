@@ -3,12 +3,11 @@ require "csv"
 require "rbvmomi/vim"
 
 class Ems
-  attr_accessor :id
   # @option options :host       hostname
   # @option options :user       username
   # @option options :passsword  password
-  def initialize(id, options = {})
-    @id = id
+  attr_reader :options
+  def initialize(options = {})
     @options = options
     @options[:ssl] = true
     @options[:insecure] = true
@@ -173,6 +172,15 @@ class Ems
     end
   end
 
+  def capture_interval_to_interval_name(interval)
+    case interval
+    when "20"
+      "realtime"
+    else
+      "hourly"
+    end
+  end
+
   def parse_metric(metric)
     base = {
       :mor      => metric.entity._ref,
@@ -206,8 +214,8 @@ class Ems
     {
       :ns       => "urn:vim25",
       :host     => @options[:host],
-      :ssl      => true,
-      :insecure => true,
+      :ssl      => @options[:ssl],
+      :insecure => @options[:insecure],
       :path     => "/sdk",
       :port     => 443,
       :rev      => "6.5",

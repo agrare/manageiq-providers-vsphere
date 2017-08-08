@@ -11,7 +11,10 @@ class MetricsCollector
   def initialize(options)
     @options  = options
 
-    @ems = Ems.new(options[:ems_id], ems_options)
+    @options[:format]   ||= "csv"
+    @options[:interval] ||= "20"
+
+    @ems = Ems.new(ems_options)
     @queue = MiqQueue.new(q_options)
 
     @collect_interval = options[:collect_interval] || 60
@@ -23,24 +26,47 @@ class MetricsCollector
     conn = ems.connection
 
     perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
-    start_time = nil
+
+    start_time = end_time = nil
+
+    format   = options[:format]
+    interval = options[:interval]
 
     until exit_requested
       log.info("Collecting performance counters...")
 
       perf_query_options = {
-        :format     => "csv",
-        :start_time => start_time
+        :interval   => interval,
+        :format     => format,
+        :start_time => start_time,
+        :end_time   => end_time
       }
 
       ems.all_powered_on_vms.each_slice(query_size) do |vms|
-        entity_metrics = ems.perf_query(perf_counters_to_collect, vms, perf_query_options)
+        entity_metrics = ems.perf_query(
+          perf_counters_to_collect,
+          vms,
+          perf_query_options
+        )
+
+        metric_payload_base = {
+          :ems_id         => options[:ems_id],
+          :interval_name  => ems.capture_interval_to_interval_name(interval),
+          :start_range    => start_time,
+          :end_range      => end_time,
+        }
 
         metrics_payload = entity_metrics.collect do |metric|
-          ems.parse_metric(metric)
+          counters = [] # TODO
+          counter_values = ems.parse_metric(metric)
+
+          metric_payload_base.merge(
+            :counters       => counters,
+            :counter_values => counter_values
+          )
         end
 
-        queue.save(:ems_id => ems.id, :metrics => metrics_payload)
+        queue.save(metrics_payload)
       end
 
       log.info("Collecting performance counters...Complete")
