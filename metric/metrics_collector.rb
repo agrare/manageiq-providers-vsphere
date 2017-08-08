@@ -11,7 +11,7 @@ class MetricsCollector
   def initialize(options)
     @options  = options
 
-    @ems = Ems.new(ems_options)
+    @ems = Ems.new(options[:ems_id], ems_options)
     @queue = MiqQueue.new(q_options)
 
     @collect_interval = options[:collect_interval] || 60
@@ -40,7 +40,7 @@ class MetricsCollector
           ems.parse_metric(metric)
         end
 
-        queue.save(metrics_payload)
+        queue.save(:ems_id => ems.id, :metrics => metrics_payload)
       end
 
       log.info("Collecting performance counters...Complete")

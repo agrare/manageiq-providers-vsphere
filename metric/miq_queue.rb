@@ -8,18 +8,17 @@ class MiqQueue
   # @option options :client_ref descriptor on client connection (default: collector)
   def initialize(options)
     @options = options
+
     options[:client_ref] ||= "metrics_collector"
   end
 
   def save(metrics)
     connection.publish_message(
       :service  => 'metrics',
-      #:affinity => 'ems_vmware1',
       :message  => 'save_metrics',
       :payload  => metrics
     )
   end
-
 
   def connection
     @connection ||= ManageIQ::Messaging::Client.open(@options)
