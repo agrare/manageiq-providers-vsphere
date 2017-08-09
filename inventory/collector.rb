@@ -17,6 +17,9 @@ class Collector
     @ems_id  = options[:ems_id]
     @queue   = MiqQueue.new(q_options)
 
+    @options[:max_wait_seconds]   ||= 60
+    @options[:max_object_updates] ||= 100
+
     @exit_requested = false
   end
 
@@ -86,7 +89,10 @@ class Collector
 
     # Return if we don't receive any updates for 60 seconds break
     # so that we can check if we are supposed to exit
-    options = RbVmomi::VIM.WaitOptions(:maxWaitSeconds => 60)
+    wait_options = RbVmomi::VIM.WaitOptions(
+      :maxWaitSeconds   => options[:max_wait_seconds],
+      :maxObjectUpdates => options[:max_object_updates],
+    )
 
     # Send the "special initial data version" i.e. an empty string
     # so that we get all inventory back in the first update set
@@ -96,7 +102,7 @@ class Collector
 
     initial = true
     until exit_requested
-      update_set = vim.propertyCollector.WaitForUpdatesEx(:version => version, :options => options)
+      update_set = vim.propertyCollector.WaitForUpdatesEx(:version => version, :options => wait_options)
       next if update_set.nil?
 
       # Save the new update set version
