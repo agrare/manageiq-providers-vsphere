@@ -46,7 +46,6 @@ class Parser
     parse_compute_resource_summary(cluster_hash, props)
     parse_compute_resource_das_config(cluster_hash, props)
     parse_compute_resource_drs_config(cluster_hash, props)
-    parse_compute_resource_children(cluster_hash, props)
 
     collections[:ems_clusters].build(cluster_hash)
   end
@@ -60,14 +59,11 @@ class Parser
       :ems_ref      => object._ref,
       :uid_ems      => object._ref,
       :type         => "EmsFolder",
-      :ems_children => {},
     }
 
     if props.include?("name")
       dc_hash[:name] = URI.decode(props["name"])
     end
-
-    # TODO: causing to_yaml exceptions parse_datacenter_children(dc_hash, props)
 
     collections[:ems_folders].build(dc_hash)
   end
@@ -109,14 +105,11 @@ class Parser
       :ems_ref      => object._ref,
       :uid_ems      => object._ref,
       :type         => "EmsFolder",
-      :ems_children => {},
     }
 
     if props.include?("name")
       folder_hash[:name] = URI.decode(props["name"])
     end
-
-    parse_folder_children(folder_hash, props)
 
     collections[:ems_folders].build(folder_hash)
   end
@@ -134,7 +127,6 @@ class Parser
     parse_host_system_network(host_hash, props)
     parse_host_system_runtime(host_hash, props)
     parse_host_system_system_info(host_hash, props)
-    parse_host_system_children(host_hash, props)
 
     host_hash[:type] = if host_hash.include?(:vmm_product) && !%w(esx esxi).include?(host_hash[:vmm_product].to_s.downcase)
                          "ManageIQ::Providers::Vmware::InfraManager::Host"
@@ -170,7 +162,6 @@ class Parser
 
     parse_resource_pool_memory_allocation(rp_hash, props)
     parse_resource_pool_cpu_allocation(rp_hash, props)
-    # TODO: causing to_yaml exceptions parse_resource_pool_children(rp_hash, props)
 
     collections[:resource_pools].build(rp_hash)
   end
