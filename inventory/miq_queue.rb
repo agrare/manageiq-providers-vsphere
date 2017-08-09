@@ -11,7 +11,7 @@ class MiqQueue
     @options[:client_ref] ||= "inventory_collector"
     @options[:timeout]    ||= 60
 
-    ManageIQ::Messaging.logger = Logger.new(STDOUT)
+    ManageIQ::Messaging.logger = Logger.new(STDOUT) if @options[:debug]
   end
 
   def save(inventory)
