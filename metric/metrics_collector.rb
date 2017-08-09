@@ -7,6 +7,7 @@ require_relative 'miq_queue'
 
 class MetricsCollector
   attr_reader :collect_interval, :exit_requested, :query_size, :options
+  attr_accessor :format, :interval, :interval_name, :ems_id
   attr_reader :ems, :queue
   def initialize(options)
     @options  = options
@@ -19,12 +20,14 @@ class MetricsCollector
 
     @collect_interval = options[:collect_interval] || 60
     @query_size = options[:perf_query_size] || 250
+    @format = options[:format] || "csv"
+    @interval = options[:interval] || "20"
+    @interval_name = ems.capture_interval_to_interval_name(interval)
+    @ems_id = options[:ems_id]
     @exit_requested = false
   end
 
   def run
-    conn = ems.connection
-
     perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
 
     perf_counters_by_id = {}
@@ -33,9 +36,6 @@ class MetricsCollector
     end
 
     start_time = end_time = nil
-
-    format   = options[:format]
-    interval = options[:interval]
 
     until exit_requested
       log.info("Collecting performance counters...")
@@ -55,8 +55,8 @@ class MetricsCollector
         )
 
         metric_payload_base = {
-          :ems_id         => options[:ems_id],
-          :interval_name  => ems.capture_interval_to_interval_name(interval),
+          :ems_id         => ems_id,
+          :interval_name  => interval_name,
           :start_range    => start_time,
           :end_range      => end_time,
         }
@@ -87,9 +87,11 @@ class MetricsCollector
             end
           end
 
+          ems_refs = processed_res.map { |pr| pr[:mor] }.uniq
           metric_payload_base.merge(
+            :ems_ref        => ems_refs.first,
             :counters       => counters,
-            :counter_values => counter_values
+            :counter_values => counter_values,
           )
         end
 
@@ -105,7 +107,7 @@ class MetricsCollector
 
     log.info("Exiting...")
   ensure
-    conn.close unless conn.nil?
+    ems.close
   end
 
   def stop

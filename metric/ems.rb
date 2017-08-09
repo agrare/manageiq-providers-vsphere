@@ -213,6 +213,10 @@ class Ems
     end
   end
 
+  def close
+    @connection.close if @connection
+  end
+
   # private
 
   def vim_opts
