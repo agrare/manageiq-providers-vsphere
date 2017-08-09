@@ -12,9 +12,6 @@ class MetricsCollector
   def initialize(options)
     @options  = options
 
-    @options[:format]   ||= "csv"
-    @options[:interval] ||= "20"
-
     @ems = Ems.new(ems_options)
     @queue = MiqQueue.new(q_options)
 
@@ -54,13 +51,6 @@ class MetricsCollector
           perf_query_options
         )
 
-        metric_payload_base = {
-          :ems_id         => ems_id,
-          :interval_name  => interval_name,
-          :start_range    => start_time,
-          :end_range      => end_time,
-        }
-
         metrics_payload = entity_metrics.collect do |metric|
           counters       = {}
           counter_values = Hash.new { |h, k| h[k] = {} }
@@ -87,12 +77,15 @@ class MetricsCollector
             end
           end
 
-          ems_refs = processed_res.map { |pr| pr[:mor] }.uniq
-          metric_payload_base.merge(
-            :ems_ref        => ems_refs.first,
+          {
+            :ems_id         => ems_id,
+            :ems_ref        => metric.entity._ref,
+            :interval_name  => interval_name,
+            :start_range    => start_time,
+            :end_range      => end_time,
             :counters       => counters,
-            :counter_values => counter_values,
-          )
+            :counter_values => counter_values
+          }
         end
 
         queue.save(metrics_payload)
