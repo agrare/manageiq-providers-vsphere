@@ -18,7 +18,7 @@ class Collector
     @queue   = MiqQueue.new(q_options)
 
     @options[:max_wait_seconds]   ||= 60
-    @options[:max_object_updates] ||= 100
+    @options[:max_object_updates] ||= 40
 
     @exit_requested = false
   end
