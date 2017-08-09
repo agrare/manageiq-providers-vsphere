@@ -11,6 +11,10 @@ class Persister
     @type        = type
   end
 
+  def to_yaml
+    YAML.dump(to_raw_data)
+  end
+
   def to_raw_data
     collections_data = collections.map do |key, collection|
       next if collection.data.blank? && collection.manager_uuids.blank? && collection.all_manager_uuids.nil?

@@ -125,7 +125,7 @@ class Collector
 
       parser = nil
 
-      inventory = persister.to_raw_data
+      inventory = persister.to_yaml
       publish_inventory(inventory)
 
       next if update_set.truncated
