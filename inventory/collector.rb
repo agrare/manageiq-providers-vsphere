@@ -111,7 +111,7 @@ class Collector
       property_filter_update_set = update_set.filterSet
       next if property_filter_update_set.blank?
 
-      persister = Persister.new(ems_id, "ManageIQ::Providers::Vmware::InfraManager::Inventory::Persister")
+      persister = Persister.new(ems_id, "ManageIQ::Providers::Vmware::InfraManager::Inventory::Persister::Batch")
       parser ||= Parser.new(persister.collections)
 
       property_filter_update_set.each do |property_filter_update|
