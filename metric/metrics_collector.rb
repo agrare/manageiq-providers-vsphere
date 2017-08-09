@@ -8,12 +8,12 @@ require_relative 'miq_queue'
 class MetricsCollector
   attr_reader :collect_interval, :exit_requested, :query_size, :options
   attr_accessor :format, :interval, :interval_name, :ems_id
-  attr_reader :ems, :queue
+  attr_reader :ems, :miq_queue
   def initialize(options)
     @options  = options
 
     @ems = Ems.new(ems_options)
-    @queue = MiqQueue.new(q_options)
+    @miq_queue = MiqQueue.new(q_options)
 
     @collect_interval = options[:collect_interval] || 60
     @query_size = options[:perf_query_size] || 250
@@ -88,7 +88,7 @@ class MetricsCollector
           }
         end
 
-        queue.save(metrics_payload)
+        miq_queue.save(metrics_payload)
       end
 
       log.info("Collecting performance counters...Complete")
