@@ -1,27 +1,29 @@
 require "logger"
 require "csv"
 require "rbvmomi/vim"
+require "active_support/core_ext/numeric/time"
 
 require_relative 'ems'
 require_relative 'miq_queue'
 
 class MetricsCollector
   attr_reader :collect_interval, :exit_requested, :query_size, :options
-  attr_accessor :format, :interval, :interval_name, :ems_id
+  attr_accessor :format, :interval, :interval_name, :ems_id, :initial_start_time
   attr_reader :ems, :miq_queue
   def initialize(options)
     @options  = options
 
-    @ems = Ems.new(ems_options)
+    @ems       = Ems.new(ems_options)
     @miq_queue = MiqQueue.new(q_options)
 
-    @collect_interval = options[:collect_interval] || 60
-    @query_size = options[:perf_query_size] || 250
-    @format = options[:format] || "csv"
-    @interval = options[:interval] || "20"
-    @interval_name = ems.capture_interval_to_interval_name(interval)
-    @ems_id = options[:ems_id]
-    @exit_requested = false
+    @collect_interval   = options[:collect_interval] || 60
+    @query_size         = options[:perf_query_size] || 250
+    @format             = options[:format] || "csv"
+    @initial_start_time = options[:initial_start_time] || Time.now - 5.minutes
+    @interval           = options[:interval] || "20"
+    @interval_name      = ems.capture_interval_to_interval_name(interval)
+    @ems_id             = options[:ems_id]
+    @exit_requested     = false
   end
 
   def run
@@ -32,7 +34,8 @@ class MetricsCollector
       perf_counters_by_id[counter.key] = counter
     end
 
-    start_time = end_time = nil
+    start_time = initial_start_time
+    end_time = nil
 
     until exit_requested
       log.info("Collecting performance counters...")
