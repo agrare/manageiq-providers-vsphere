@@ -213,6 +213,21 @@ class Ems
     end
   end
 
+  def vim_entity_to_miq_model(entity)
+    case entity.class.wsdl_name
+    when "VirtualMachine"
+      "VM"
+    when "HostSystem"
+      "Host"
+    when "ClusterComputeResource"
+      "EmsCluster"
+    when "Datastore"
+      "Storage"
+    when "ResourcePool"
+      "ResourcePool"
+    end
+  end
+
   def close
     @connection.close if @connection
   end

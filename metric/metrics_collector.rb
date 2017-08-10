@@ -83,6 +83,7 @@ class MetricsCollector
           {
             :ems_id         => ems_id,
             :ems_ref        => metric.entity._ref,
+            :ems_klass      => ems.vim_entity_to_miq_model(metric.entity),
             :interval_name  => interval_name,
             :start_range    => start_time,
             :end_range      => end_time,
