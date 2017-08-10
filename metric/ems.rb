@@ -216,7 +216,7 @@ class Ems
   def vim_entity_to_miq_model(entity)
     case entity.class.wsdl_name
     when "VirtualMachine"
-      "VM"
+      "Vm"
     when "HostSystem"
       "Host"
     when "ClusterComputeResource"
