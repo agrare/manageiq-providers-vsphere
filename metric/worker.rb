@@ -29,6 +29,7 @@ def parse_args
     opt :q_port,     "queue port",     :type => :integer
     opt :q_user,     "queue username", :type => :string
     opt :q_password, "queue password", :type => :string
+    opt :q_encoding, "queue encoding (json, yaml)", :type => :string
     opt :debug,      "debug",          :type => :flag
     opt :timeout,    "queue timeout",  :type => :integer
     opt :heartbeat,  "queue heartbeat (true, false, value)",  :type => :string
@@ -43,6 +44,7 @@ def parse_args
   args[:q_port]       ||= ENV["QUEUE_PORT"]     || "61616"
   args[:q_user]       ||= ENV["QUEUE_USER"]     || "admin"
   args[:q_password]   ||= ENV["QUEUE_PASSWORD"] || "smartvm"
+  args[:q_encoding]   ||= ENV["QUEUE_ENCODING"] || "json"
 
   args[:q_port] = args[:q_port].to_i
   if args[:heartbeat] == "true"

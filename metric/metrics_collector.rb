@@ -1,5 +1,6 @@
 require "logger"
 require "csv"
+require "json"
 require "rbvmomi/vim"
 require "active_support/core_ext/numeric/time"
 
@@ -47,53 +48,61 @@ class MetricsCollector
         :end_time   => end_time
       }
 
-      ems.all_powered_on_vms.each_slice(query_size) do |vms|
-        entity_metrics = ems.perf_query(
-          perf_counters_to_collect,
-          vms,
-          perf_query_options
-        )
+      log.info("Retrieving VMs...")
+      targets = ems.all_powered_on_vms
+      log.info("Retrieving VMs...Complete")
 
-        metrics_payload = entity_metrics.collect do |metric|
-          counters       = {}
-          counter_values = Hash.new { |h, k| h[k] = {} }
+      log.info("Collecting metrics...")
 
-          processed_res = ems.parse_metric(metric)
-          processed_res.each do |res|
-            full_vim_key = "#{res[:counter_id]}_#{res[:instance]}"
+      entity_metrics = []
+      targets.each_slice(query_size) do |vms|
+        entity_metrics.concat(ems.perf_query(perf_counters_to_collect, vms, perf_query_options))
+      end
+      log.info("Collecting metrics...Complete")
 
-            counter_info = perf_counters_by_id[res[:counter_id]]
+      log.info("Parsing metrics...")
+      metrics_payload = entity_metrics.collect do |metric|
+        counters       = {}
+        counter_values = Hash.new { |h, k| h[k] = {} }
 
-            counters[full_vim_key] = {
-              :counter_key           => ems.perf_counter_key(counter_info),
-              :rollup                => counter_info.rollupType,
-              :precision             => counter_info.unitInfo.key == "percent" ? 0.1 : 1,
-              :unit_key              => counter_info.unitInfo.key,
-              :vim_key               => res[:counter_id].to_s,
-              :instance              => res[:instance],
-              :capture_interval      => res[:interval],
-              :capture_interval_name => ems.capture_interval_to_interval_name(res[:interval]),
-            }
+        processed_res = ems.parse_metric(metric)
+        processed_res.each do |res|
+          full_vim_key = "#{res[:counter_id]}_#{res[:instance]}"
 
-            Array(res[:results]).each_slice(2) do |timestamp, value|
-              counter_values[timestamp][full_vim_key] = value
-            end
-          end
+          counter_info = perf_counters_by_id[res[:counter_id]]
 
-          {
-            :ems_id         => ems_id,
-            :ems_ref        => metric.entity._ref,
-            :ems_klass      => ems.vim_entity_to_miq_model(metric.entity),
-            :interval_name  => interval_name,
-            :start_range    => start_time,
-            :end_range      => end_time,
-            :counters       => counters,
-            :counter_values => counter_values
+          counters[full_vim_key] = {
+            :counter_key           => ems.perf_counter_key(counter_info),
+            :rollup                => counter_info.rollupType,
+            :precision             => counter_info.unitInfo.key == "percent" ? 0.1 : 1,
+            :unit_key              => counter_info.unitInfo.key,
+            :vim_key               => res[:counter_id].to_s,
+            :instance              => res[:instance],
+            :capture_interval      => res[:interval],
+            :capture_interval_name => ems.capture_interval_to_interval_name(res[:interval]),
           }
+
+          Array(res[:results]).each_slice(2) do |timestamp, value|
+            counter_values[timestamp][full_vim_key] = value
+          end
         end
 
-        miq_queue.save(metrics_payload)
+        {
+          :ems_id         => ems_id,
+          :ems_ref        => metric.entity._ref,
+          :ems_klass      => ems.vim_entity_to_miq_model(metric.entity),
+          :interval_name  => interval_name,
+          :start_range    => start_time,
+          :end_range      => end_time,
+          :counters       => counters,
+          :counter_values => counter_values
+        }
       end
+      log.info("Parsing metrics...Complete")
+
+      log.info("Sending metrics...")
+      miq_queue.save(metrics_payload)
+      log.info("Sending metrics...Complete")
 
       log.info("Collecting performance counters...Complete")
 
@@ -155,6 +164,7 @@ class MetricsCollector
       :port     => @options[:q_port].to_i,
       :username => @options[:q_user],
       :password => @options[:q_password],
+      :default_encoding => @options[:q_encoding],
     }
   end
 end
