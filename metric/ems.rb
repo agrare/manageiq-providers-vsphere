@@ -82,8 +82,6 @@ class Ems
   end
 
   def perf_query(perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
-    log.info("Querying perf for #{entities.count} VMs...")
-
     format = RbVmomi::VIM.PerfFormat(format)
 
     metrics = []
@@ -112,8 +110,6 @@ class Ems
 
     entity_metrics = connection.serviceContent.perfManager.QueryPerf(:querySpec => perf_query_spec_set)
 
-    log.info("Querying perf for #{entities.count} VMs...Complete")
-
     entity_metrics
   end
 
@@ -126,7 +122,6 @@ class Ems
   end
 
   def all_vms(path_set = [])
-    log.info("Retrieving vms...")
     filter_spec = RbVmomi::VIM.PropertyFilterSpec(
       :objectSet => [
         :obj => connection.rootFolder,
