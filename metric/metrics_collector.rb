@@ -51,9 +51,9 @@ class MetricsCollector
         :end_time   => end_time
       }
 
-      log.info("Retrieving VMs...")
-      targets = ems.all_powered_on_vms
-      log.info("Retrieving VMs...Complete")
+      log.info("Retrieving Targets...")
+      targets = ems.capture_targets(target_options)
+      log.info("Retrieving Targets...Complete - Count [#{targets.count}]")
 
       log.info("Collecting metrics...")
 
@@ -215,6 +215,13 @@ class MetricsCollector
       :port     => @options[:q_port].to_i,
       :username => @options[:q_user],
       :password => @options[:q_password],
+    }
+  end
+
+  def target_options
+    {
+      :exclude_hosts => @options[:exclude_hosts],
+      :exclude_vms   => @options[:exclude_vms],
     }
   end
 end

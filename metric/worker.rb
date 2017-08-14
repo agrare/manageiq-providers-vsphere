@@ -29,6 +29,10 @@ def parse_args
     opt :q_port,     "queue port",     :type => :integer
     opt :q_user,     "queue username", :type => :string
     opt :q_password, "queue password", :type => :string
+
+    opt :exclude_hosts, "exclude hosts", :type => :boolean
+    opt :exclude_vms,   "exclude vms",   :type => :boolean
+
     opt :debug,      "debug",          :type => :flag
     opt :timeout,    "queue timeout",  :type => :integer
     opt :heartbeat,  "queue heartbeat (true, false, value)",  :type => :string

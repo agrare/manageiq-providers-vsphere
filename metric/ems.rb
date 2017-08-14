@@ -107,42 +107,132 @@ class Ems
     end.compact
   end
 
-  def all_vms(path_set = [])
-    filter_spec = RbVmomi::VIM.PropertyFilterSpec(
-      :objectSet => [
-        :obj => connection.rootFolder,
-        :selectSet => [
-          RbVmomi::VIM.TraversalSpec(
-            :name => 'tsFolder',
-            :type => 'Folder',
-            :path => 'childEntity',
-            :skip => false,
-            :selectSet => [
-              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder'),
-              RbVmomi::VIM.SelectionSpec(:name => 'tsDatacenterVmFolder'),
-            ]
-          ),
-          RbVmomi::VIM.TraversalSpec(
-            :name => 'tsDatacenterVmFolder',
-            :type => 'Datacenter',
-            :path => 'vmFolder',
-            :skip => false,
-            :selectSet => [
-              RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')
-            ]
-          )
-        ],
-      ],
-      :propSet => [
-        RbVmomi::VIM.PropertySpec(
-          :type => "VirtualMachine",
-          :pathSet => path_set,
-        )
-      ]
+  def capture_targets(target_options = {})
+    select_set = []
+    prop_set   = []
+    targets    = []
+
+    unless target_options[:exclude_vms]
+      select_set.concat(vm_traversal_specs)
+      prop_set << vm_prop_spec
+    end
+
+    unless target_options[:exclude_hosts]
+      select_set.concat(host_traversal_specs)
+      prop_set << host_prop_spec
+    end
+
+    selection_spec_names = select_set.collect { |selection_spec| selection_spec.name }
+    select_set << child_entity_traversal_spec(selection_spec_names)
+
+    object_spec = RbVmomi::VIM.ObjectSpec(
+      :obj       => connection.rootFolder,
+      :selectSet => select_set
     )
 
-    result = connection.propertyCollector.RetrieveProperties(:specSet => [filter_spec])
-    result.to_a.collect { |r| [r.obj, r.propSet] }
+    filter_spec = RbVmomi::VIM.PropertyFilterSpec(
+      :objectSet => [object_spec],
+      :propSet   => prop_set
+    )
+
+    options = RbVmomi::VIM.RetrieveOptions()
+
+    result = connection.propertyCollector.RetrievePropertiesEx(
+      :specSet => [filter_spec], :options => options
+    )
+
+    while result
+      token = result.token
+
+      result.objects.each do |object_content|
+        case object_content.obj
+        when RbVmomi::VIM::VirtualMachine
+          vm_props = Array(object_content.propSet)
+          next if vm_props.empty?
+
+          vm_power_state = vm_props.detect { |prop| prop.name == "runtime.powerState" }
+          next if vm_power_state.nil?
+
+          next unless vm_power_state.val == "poweredOn"
+        when RbVmomi::VIM::HostSystem
+          host_props = Array(object_content.propSet)
+          next if host_props.empty?
+
+          host_connection_state = host_props.detect { |prop| prop.name == "runtime.connectionState" }
+          next if host_connection_state.nil?
+
+          next unless host_connection_state.val == "connected"
+        end
+
+        targets << object_content.obj
+      end
+
+      break if token.nil?
+
+      result = connection.propertyCollector.ContinueRetrievePropertiesEx(:token => token)
+    end
+
+    targets
+  end
+
+  def datacenter_folder_traversal_spec(path)
+    RbVmomi::VIM.TraversalSpec(
+      :name => "tsDatacenter#{path}",
+      :type => "Datacenter",
+      :path => path,
+      :skip => false,
+      :selectSet => [
+        RbVmomi::VIM.SelectionSpec(:name => "tsFolder")
+      ]
+    )
+  end
+
+  def vm_traversal_specs
+    [datacenter_folder_traversal_spec("vmFolder")]
+  end
+
+  def compute_resource_to_host_traversal_spec
+    RbVmomi::VIM.TraversalSpec(
+      :name => "tsComputeResourceToHost",
+      :type => "ComputeResource",
+      :path => "host",
+      :skip => false,
+    )
+  end
+
+  def host_traversal_specs
+    [
+      datacenter_folder_traversal_spec("hostFolder"),
+      compute_resource_to_host_traversal_spec
+    ]
+  end
+
+  def child_entity_traversal_spec(selection_spec_names = [])
+    select_set = selection_spec_names.map do |name|
+      RbVmomi::VIM.SelectionSpec(:name => name)
+    end
+
+    RbVmomi::VIM.TraversalSpec(
+      :name => 'tsFolder',
+      :type => 'Folder',
+      :path => 'childEntity',
+      :skip => false,
+      :selectSet => select_set,
+    )
+  end
+
+  def vm_prop_spec
+    RbVmomi::VIM.PropertySpec(
+      :type    => "VirtualMachine",
+      :pathSet => ["runtime.powerState"],
+    )
+  end
+
+  def host_prop_spec
+    RbVmomi::VIM.PropertySpec(
+      :type    => "HostSystem",
+      :pathSet => ["runtime.connectionState"],
+    )
   end
 
   def parse_metric(metric)
