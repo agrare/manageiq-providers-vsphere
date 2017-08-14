@@ -21,13 +21,17 @@ class MetricsCollector
     @format             = options[:format] || "csv"
     @initial_start_time = options[:initial_start_time] || Time.now - 5.minutes
     @interval           = options[:interval] || "20"
-    @interval_name      = ems.capture_interval_to_interval_name(interval)
+    @interval_name      = capture_interval_to_interval_name(interval)
     @ems_id             = options[:ems_id]
     @exit_requested     = false
   end
 
   def run
-    perf_counters_to_collect = ems.counters_to_collect(METRIC_CAPTURE_COUNTERS)
+    log.info("Retrieving perf counters...")
+    all_perf_counters = ems.perf_counter_info
+    log.info("Retrieving perf counters...Complete - Count: [#{all_perf_counters.size}]")
+
+    perf_counters_to_collect = counters_to_collect(METRIC_CAPTURE_COUNTERS, all_perf_counters)
 
     perf_counters_by_id = {}
     perf_counters_to_collect.each do |counter|
@@ -71,14 +75,14 @@ class MetricsCollector
           counter_info = perf_counters_by_id[res[:counter_id]]
 
           counters[full_vim_key] = {
-            :counter_key           => ems.perf_counter_key(counter_info),
+            :counter_key           => perf_counter_key(counter_info),
             :rollup                => counter_info.rollupType,
             :precision             => counter_info.unitInfo.key == "percent" ? 0.1 : 1,
             :unit_key              => counter_info.unitInfo.key,
             :vim_key               => res[:counter_id].to_s,
             :instance              => res[:instance],
             :capture_interval      => res[:interval],
-            :capture_interval_name => ems.capture_interval_to_interval_name(res[:interval]),
+            :capture_interval_name => capture_interval_to_interval_name(res[:interval]),
           }
 
           Array(res[:results]).each_slice(2) do |timestamp, value|
@@ -89,7 +93,7 @@ class MetricsCollector
         {
           :ems_id         => ems_id,
           :ems_ref        => metric.entity._ref,
-          :ems_klass      => ems.vim_entity_to_miq_model(metric.entity),
+          :ems_klass      => vim_entity_to_miq_model(metric.entity),
           :interval_name  => interval_name,
           :start_range    => start_time,
           :end_range      => end_time,
@@ -148,12 +152,60 @@ class MetricsCollector
     @logger ||= Logger.new(STDOUT)
   end
 
+  def capture_interval_to_interval_name(interval)
+    case interval
+    when "20"
+      "realtime"
+    else
+      "hourly"
+    end
+  end
+
+  def vim_entity_to_miq_model(entity)
+    case entity.class.wsdl_name
+    when "VirtualMachine"
+      "Vm"
+    when "HostSystem"
+      "Host"
+    when "ClusterComputeResource"
+      "EmsCluster"
+    when "Datastore"
+      "Storage"
+    when "ResourcePool"
+      "ResourcePool"
+    end
+  end
+
+  def perf_counter_key(counter)
+    group  = counter.groupInfo.key.downcase
+    name   = counter.nameInfo.key.downcase
+    rollup = counter.rollupType.downcase
+    stats  = counter.statsType.downcase
+
+    "#{group}_#{name}_#{stats}_#{rollup}".to_sym
+  end
+
+  def perf_counters_by_name(all_perf_counters)
+    all_perf_counters.to_a.each_with_object({}) do |counter, hash|
+      hash[perf_counter_key(counter)] = counter
+    end
+  end
+
+  def counters_to_collect(perf_counter_names, all_perf_counters)
+    hash = perf_counters_by_name(all_perf_counters)
+    perf_counter_names.map do |counter_name|
+      hash[counter_name]
+    end
+  end
+
   def ems_options
     {
       :ems_id   => @options[:ems_id],
       :host     => @options[:ems_hostname],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],
+      :ssl      => @options[:ems_ssl],
+      :insecure => @options[:ems_insecure],
     }
   end
 
