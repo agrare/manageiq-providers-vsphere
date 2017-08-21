@@ -13,11 +13,16 @@ class MiqQueue
   end
 
   def save(events)
-    messages = events.collect do |event|
-      {:service => "events", :message => "save_events"}.merge(:payload => event)
+    events.each do |event|
+      connection.publish_topic(
+          {
+              :service => "events",
+              :sender  => event[:ems_id],
+              :event   => event[:event_type],
+              :payload => event,
+          }
+      )
     end
-
-    connection.publish_messages(messages)
   end
 
 
