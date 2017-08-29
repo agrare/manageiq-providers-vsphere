@@ -1,6 +1,8 @@
 require "trollop"
 require_relative "collector"
 
+STDOUT.sync = true
+
 def main args
   collector = Collector.new(args)
   log = Logger.new(STDOUT)

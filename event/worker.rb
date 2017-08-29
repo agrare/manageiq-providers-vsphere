@@ -1,6 +1,8 @@
 require "trollop"
 require_relative "event_catcher"
 
+STDOUT.sync = true
+
 def main args
   collector = EventCatcher.new(args)
   log = Logger.new(STDOUT)
