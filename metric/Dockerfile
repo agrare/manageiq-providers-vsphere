@@ -7,4 +7,4 @@ COPY Gemfile Gemfile
 RUN bundle install
 COPY . .
 ENTRYPOINT ["bundle", "exec", "ruby"]
-CMD "worker.rb"
+CMD ["worker.rb"]
