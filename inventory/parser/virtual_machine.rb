@@ -74,7 +74,7 @@ class Parser
       end
       if props.include?("summary.runtime.host") && !props["summary.runtime.host"].nil?
         host = props["summary.runtime.host"]
-        vm_hash[:host] = collections[:hosts].lazy_find(host._ref)
+        vm_hash[:host] = collections[:hosts].find_or_build(host._ref)
       end
       if props.include?("summary.runtime.bootTime")
         vm_hash[:boot_time] = props["summary.runtime.bootTime"]
@@ -231,7 +231,7 @@ class Parser
         when RbVmomi::VIM::VirtualDeviceFileBackingInfo
           disk_hash[:filename] = backing.fileName
           disk_hash[:mode] = backing.diskMode
-          disk_hash[:storage] = collections[:storages].lazy_find(backing.datastore._ref) unless backing.datastore.nil?
+          disk_hash[:storage] = collections[:storages].find_or_build(backing.datastore._ref) unless backing.datastore.nil?
         when RbVmomi::VIM::VirtualDeviceRemoteDeviceBackingInfo
           disk_hash[:filename] = backing.deviceName
         end
@@ -286,7 +286,7 @@ class Parser
                     else
                       backing.deviceName
                     end
-          guest_device_hash[:lan] = collections[:lans].lazy_find(lan_uid)
+          guest_device_hash[:lan] = collections[:lans].find_or_build(lan_uid)
         end
 
         collections[:guest_devices].build(guest_device_hash)

@@ -42,7 +42,7 @@ class Parser
       props["host"].to_a.each do |host_mount|
         collections[:host_storages].build(
           :storage   => storage,
-          :host      => collections[:hosts].lazy_find(host_mount.key._ref),
+          :host      => collections[:hosts].find_or_build(host_mount.key._ref),
           :ems_ref   => datastore_ref,
           :read_only => host_mount.mountInfo.accessMode == "readOnly",
         )

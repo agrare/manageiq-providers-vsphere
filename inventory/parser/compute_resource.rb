@@ -47,7 +47,7 @@ class Parser
       if props.include?("resourcePool")
         rp = props["resourcePool"]
         unless rp.nil?
-          cluster_hash[:ems_children][:rp] << collections[:resource_pools].lazy_find(rp._ref)
+          cluster_hash[:ems_children][:rp] << collections[:resource_pools].find_or_build(rp._ref)
         end
       end
     end

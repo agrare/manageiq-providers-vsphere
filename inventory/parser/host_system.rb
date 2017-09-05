@@ -202,7 +202,7 @@ class Parser
             :present         => true,
             :controller_type => 'ethernet',
             :address         => pnic.mac,
-            :switch          => collections[:switches].lazy_find(pnic.key)
+            :switch          => collections[:switches].find_or_build(pnic.key)
           )
         end
       end

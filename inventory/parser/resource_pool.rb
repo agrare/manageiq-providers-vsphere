@@ -46,12 +46,12 @@ class Parser
 
       if props.include?("resourcePool")
         props["resourcePool"].to_a.each do |rp|
-          cluster_hash[:ems_children][:rp] << collections[:resource_pools].lazy_find(rp._ref)
+          cluster_hash[:ems_children][:rp] << collections[:resource_pools].find_or_build(rp._ref)
         end
       end
       if props.include?("vm")
         props["vm"].to_a.each do |vm|
-          cluster_hash[:ems_children][:vm] << collections[:resource_pools].lazy_find(vm._ref)
+          cluster_hash[:ems_children][:vm] << collections[:resource_pools].find_or_build(vm._ref)
         end
       end
     end
