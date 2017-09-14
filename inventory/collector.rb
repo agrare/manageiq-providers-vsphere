@@ -28,7 +28,7 @@ class Collector
       begin
         wait_for_updates
       rescue RbVmomi::Fault => err
-        log.err("Caught exception #{err.message}")
+        log.error("Caught exception #{err.message}")
       end
     end
 
