@@ -15,6 +15,7 @@ def main(args)
     loop { sleep 1 }
   rescue Interrupt
     collector.stop
+    thread.run if thread.status == "sleep"
     thread.join
   end
 end
