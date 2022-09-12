@@ -267,7 +267,7 @@ class Ems
       :ssl      => @options[:ssl],
       :insecure => @options[:insecure],
       :path     => "/sdk",
-      :port     => 443,
+      :port     => @options[:port] || 443,
       :rev      => "6.5",
     }
   end

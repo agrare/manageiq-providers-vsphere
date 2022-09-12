@@ -202,6 +202,7 @@ class MetricsCollector
     {
       :ems_id   => @options[:ems_id],
       :host     => @options[:ems_hostname],
+      :port     => @options[:ems_port],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],
       :ssl      => @options[:ems_ssl],
@@ -212,7 +213,7 @@ class MetricsCollector
   def q_options
     {
       :host     => @options[:q_hostname],
-      :port     => @options[:q_port].to_i,
+      :port     => @options[:q_port]&.to_i,
       :username => @options[:q_user],
       :password => @options[:q_password],
     }
