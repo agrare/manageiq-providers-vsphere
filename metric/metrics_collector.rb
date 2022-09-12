@@ -1,6 +1,6 @@
 require "logger"
 require "csv"
-require "rbvmomi/vim"
+require "rbvmomi"
 require "active_support/core_ext/numeric/time"
 
 require_relative 'ems'

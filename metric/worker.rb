@@ -1,5 +1,5 @@
-require "trollop"
-require_relative "metrics_collector"
+require "optimist"
+require "metrics_collector"
 
 STDOUT.sync = true
 Thread.abort_on_exception = true
@@ -20,7 +20,7 @@ def main(args)
 end
 
 def parse_args
-  args = Trollop.options do
+  args = Optimist.options do
     opt :ems_id,       "ems id",       :type => :int
     opt :ems_hostname, "ems hostname", :type => :string
     opt :ems_user,     "ems username", :type => :string
@@ -59,7 +59,7 @@ def parse_args
   end
 
   %i(ems_id ems_hostname ems_user ems_password).each do |param|
-    raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
+    raise Optimist::CommandlineError, "--#{param} required" if args[param].nil?
   end
 
   args

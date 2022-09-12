@@ -233,7 +233,7 @@ class Ems
       :children => []
     }
 
-    samples = CSV.parse(metric.sampleInfoCSV.to_s).first.to_a
+    samples = CSV.parse(metric['sampleInfoCSV'].to_s).first.to_a
 
     metric.value.to_a.collect do |value|
       id = value.id
