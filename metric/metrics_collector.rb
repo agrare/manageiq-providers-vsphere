@@ -61,7 +61,7 @@ class MetricsCollector
       targets.each_slice(query_size) do |vms|
         entity_metrics.concat(ems.perf_query(perf_counters_to_collect, vms, perf_query_options))
       end
-      log.info("Collecting metrics...Complete")
+      log.info("Collecting metrics...Complete - Count [#{entity_metrics.size}]")
 
       log.info("Parsing metrics...")
       metrics_payload = entity_metrics.collect do |metric|
