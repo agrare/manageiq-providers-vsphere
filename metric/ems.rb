@@ -38,33 +38,20 @@ class Ems
 
   def perf_counter_info
     spec_set = [
-      RbVmomi::VIM.PropertyFilterSpec(
-        :objectSet => [
-          RbVmomi::VIM.ObjectSpec(
-            :obj => connection.serviceContent.perfManager,
-          )
-        ],
-        :propSet   => [
-          RbVmomi::VIM.PropertySpec(
-            :type    => connection.serviceContent.perfManager.class.wsdl_name,
-            :pathSet => ["perfCounter"]
-          )
-        ],
+      filter_spec(
+          RbVmomi::VIM.ObjectSpec(:obj => connection.serviceContent.perfManager),
+          property_spec(connection.serviceContent.perfManager.class.wsdl_name, "perfCounter")
       )
     ]
     options = RbVmomi::VIM.RetrieveOptions()
 
-    result = connection.propertyCollector.RetrievePropertiesEx(
-      :specSet => spec_set, :options => options
-    )
+    result = connection.propertyCollector.RetrievePropertiesEx(:specSet => spec_set, :options => options)
 
-    return if result.nil? || result.objects.nil?
-
-    object_content = result.objects.detect { |oc| oc.obj == connection.serviceContent.perfManager }
+    object_content = result&.objects&.detect { |oc| oc.obj == connection.serviceContent.perfManager }
     return if object_content.nil?
 
     perf_counters = object_content.propSet.to_a.detect { |prop| prop.name == "perfCounter" }
-    Array(perf_counters.try(:val))
+    Array(perf_counters&.val)
   end
 
   def perf_query(perf_counters, entities, interval: "20", start_time: nil, end_time: nil, format: "normal", max_sample: nil)
@@ -106,31 +93,23 @@ class Ems
 
     unless target_options[:exclude_vms]
       select_set.concat(vm_traversal_specs)
-      prop_set << vm_prop_spec
+      prop_set << property_spec("VirtualMachine", "runtime.powerState")
     end
 
     unless target_options[:exclude_hosts]
       select_set.concat(host_traversal_specs)
-      prop_set << host_prop_spec
+      prop_set << property_spec("HostSystem", "runtime.connectionState")
     end
 
-    selection_spec_names = select_set.collect { |selection_spec| selection_spec.name }
-    select_set << child_entity_traversal_spec(selection_spec_names)
+    select_set << child_traversal_specs(select_set.collect(&:name))
 
     object_spec = RbVmomi::VIM.ObjectSpec(
       :obj       => connection.rootFolder,
       :selectSet => select_set
     )
 
-    filter_spec = RbVmomi::VIM.PropertyFilterSpec(
-      :objectSet => [object_spec],
-      :propSet   => prop_set
-    )
-
-    options = RbVmomi::VIM.RetrieveOptions()
-
     result = connection.propertyCollector.RetrievePropertiesEx(
-      :specSet => [filter_spec], :options => options
+      :specSet => [filter_spec(object_spec, prop_set)], :options => RbVmomi::VIM.RetrieveOptions()
     )
 
     while result
@@ -139,21 +118,11 @@ class Ems
       result.objects.each do |object_content|
         case object_content.obj
         when RbVmomi::VIM::VirtualMachine
-          vm_props = Array(object_content.propSet)
-          next if vm_props.empty?
-
-          vm_power_state = vm_props.detect { |prop| prop.name == "runtime.powerState" }
-          next if vm_power_state.nil?
-
-          next unless vm_power_state.val == "poweredOn"
+          vm_power_state = Array(object_content.propSet).detect { |prop| prop.name == "runtime.powerState" }
+          next if vm_power_state.nil? || vm_power_state.val != "poweredOn"
         when RbVmomi::VIM::HostSystem
-          host_props = Array(object_content.propSet)
-          next if host_props.empty?
-
-          host_connection_state = host_props.detect { |prop| prop.name == "runtime.connectionState" }
-          next if host_connection_state.nil?
-
-          next unless host_connection_state.val == "connected"
+          host_connection_state = Array(object_content.propSet).detect { |prop| prop.name == "runtime.connectionState" }
+          next if host_connection_state.nil? || host_connection_state.val != "connected"
         end
 
         targets << object_content.obj
@@ -167,50 +136,26 @@ class Ems
     targets
   end
 
-  def datacenter_folder_traversal_spec(path)
-    RbVmomi::VIM.TraversalSpec(
-      :name => "tsDatacenter#{path}",
-      :type => "Datacenter",
-      :path => path,
-      :skip => false,
-      :selectSet => [
-        RbVmomi::VIM.SelectionSpec(:name => "tsFolder")
-      ]
-    )
-  end
-
   def vm_traversal_specs
-    [datacenter_folder_traversal_spec("vmFolder")]
-  end
-
-  def compute_resource_to_host_traversal_spec
-    RbVmomi::VIM.TraversalSpec(
-      :name => "tsComputeResourceToHost",
-      :type => "ComputeResource",
-      :path => "host",
-      :skip => false,
-    )
+    [
+      traversal_spec('tsDcToDsFolder',      'Datacenter',      'datastoreFolder', 'tsFolder'),
+      traversal_spec('tsDcToNetworkFolder', 'Datacenter',      'networkFolder',   'tsFolder'),
+      traversal_spec('tsDcToVmFolder',      'Datacenter',      'vmFolder',        'tsFolder'),
+      traversal_spec('tsCrToRp',            'ComputeResource', 'resourcePool',    'tsRpToRp'),
+      traversal_spec('tsRpToRp',            'ResourcePool',    'resourcePool',    'tsRpToRp'),
+      traversal_spec('tsRpToVm',            'ResourcePool',    'vm'),
+    ]
   end
 
   def host_traversal_specs
     [
-      datacenter_folder_traversal_spec("hostFolder"),
-      compute_resource_to_host_traversal_spec
+      traversal_spec('tsDcToHostFolder',    'Datacenter',      'hostFolder',      'tsFolder'),
+      traversal_spec('tsCrToHost',          'ComputeResource', 'host'),
     ]
   end
 
-  def child_entity_traversal_spec(selection_spec_names = [])
-    select_set = selection_spec_names.map do |name|
-      RbVmomi::VIM.SelectionSpec(:name => name)
-    end
-
-    RbVmomi::VIM.TraversalSpec(
-      :name => 'tsFolder',
-      :type => 'Folder',
-      :path => 'childEntity',
-      :skip => false,
-      :selectSet => select_set,
-    )
+  def child_traversal_specs(selection_spec_names)
+    traversal_spec('tsFolder', 'Folder', 'childEntity', selection_spec_names + ['tsFolder'])
   end
 
   def vm_prop_spec
@@ -233,7 +178,7 @@ class Ems
       :children => []
     }
 
-    samples = CSV.parse(metric.sampleInfoCSV.to_s).first.to_a
+    samples = CSV.parse(metric['sampleInfoCSV'].to_s).first.to_a
 
     metric.value.to_a.collect do |value|
       id = value.id
@@ -260,6 +205,22 @@ class Ems
 
   # private
 
+  def selection_spec(names)
+    Array(names).collect { |name| RbVmomi::VIM.SelectionSpec(:name => name) } if names
+  end
+
+  def traversal_spec(name, type, path, selectSet = nil)
+    RbVmomi::VIM.TraversalSpec(:name => name, :type => type, :path => path, :skip => false, :selectSet => selection_spec(selectSet))
+  end
+
+  def filter_spec(object_spec, prop_set)
+    RbVmomi::VIM.PropertyFilterSpec(:objectSet => Array(object_spec), :propSet => Array(prop_set))
+  end
+
+  def property_spec(type, path)
+    RbVmomi::VIM.PropertySpec(:type => type, :pathSet => Array(path))
+  end
+
   def vim_opts
     {
       :ns       => "urn:vim25",
@@ -267,7 +228,7 @@ class Ems
       :ssl      => @options[:ssl],
       :insecure => @options[:insecure],
       :path     => "/sdk",
-      :port     => 443,
+      :port     => @options[:port] || 443,
       :rev      => "6.5",
     }
   end

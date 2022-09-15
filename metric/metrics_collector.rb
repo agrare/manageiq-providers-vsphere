@@ -1,6 +1,6 @@
 require "logger"
 require "csv"
-require "rbvmomi/vim"
+require "rbvmomi"
 require "active_support/core_ext/numeric/time"
 
 require_relative 'ems'
@@ -61,7 +61,7 @@ class MetricsCollector
       targets.each_slice(query_size) do |vms|
         entity_metrics.concat(ems.perf_query(perf_counters_to_collect, vms, perf_query_options))
       end
-      log.info("Collecting metrics...Complete")
+      log.info("Collecting metrics...Complete - Count [#{entity_metrics.size}]")
 
       log.info("Parsing metrics...")
       metrics_payload = entity_metrics.collect do |metric|
@@ -202,6 +202,7 @@ class MetricsCollector
     {
       :ems_id   => @options[:ems_id],
       :host     => @options[:ems_hostname],
+      :port     => @options[:ems_port],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],
       :ssl      => @options[:ems_ssl],
@@ -212,7 +213,7 @@ class MetricsCollector
   def q_options
     {
       :host     => @options[:q_hostname],
-      :port     => @options[:q_port].to_i,
+      :port     => @options[:q_port]&.to_i,
       :username => @options[:q_user],
       :password => @options[:q_password],
     }
