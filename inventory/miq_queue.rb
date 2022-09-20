@@ -28,6 +28,6 @@ class MiqQueue
   end
 
   def close
-    @connection && @connection.close
+    @connection&.close
   end
 end

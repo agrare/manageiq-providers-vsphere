@@ -210,52 +210,30 @@ class Collector
     end
 
     def select_set
-      [
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsFolder', :type => 'Folder', :path => 'childEntity',
-          :selectSet => [
-            RbVmomi::VIM.SelectionSpec(:name => 'tsFolder'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsDcToDsFolder'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsDcToHostFolder'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsDcToNetworkFolder'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsDcToVmFolder'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsCrToHost'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsCrToRp'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsRpToRp'),
-            RbVmomi::VIM.SelectionSpec(:name => 'tsRpToVm')
-          ]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsDcToDsFolder', :type => 'Datacenter', :path => 'datastoreFolder',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsDcToHostFolder', :type => 'Datacenter', :path => 'hostFolder',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsDcToNetworkFolder', :type => 'Datacenter', :path => 'networkFolder',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsDcToVmFolder', :type => 'Datacenter', :path => 'vmFolder',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsFolder')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsCrToHost', :type => 'ComputeResource', :path => 'host',
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsCrToRp', :type => 'ComputeResource', :path => 'resourcePool',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsRpToRp')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsRpToRp', :type => 'ResourcePool', :path => 'resourcePool',
-          :selectSet => [RbVmomi::VIM.SelectionSpec(:name => 'tsRpToRp')]
-        ),
-        RbVmomi::VIM.TraversalSpec(
-          :name => 'tsRpToVm', :type => 'ResourcePool', :path => 'vm',
-        ),
+      set = [
+        traversal_spec('tsDcToDsFolder',      'Datacenter',      'datastoreFolder', 'tsFolder'),
+        traversal_spec('tsDcToHostFolder',    'Datacenter',      'hostFolder',      'tsFolder'),
+        traversal_spec('tsDcToNetworkFolder', 'Datacenter',      'networkFolder',   'tsFolder'),
+        traversal_spec('tsDcToVmFolder',      'Datacenter',      'vmFolder',        'tsFolder'),
+        traversal_spec('tsCrToHost',          'ComputeResource', 'host'),
+        traversal_spec('tsCrToRp',            'ComputeResource', 'resourcePool',    'tsRpToRp'),
+        traversal_spec('tsRpToRp',            'ResourcePool',    'resourcePool',    'tsRpToRp'),
+        traversal_spec('tsRpToVm',            'ResourcePool',    'vm'),
       ]
+
+      [child_traversal_specs(set.map(&:name))] + set
+    end
+
+    def selection_spec(names)
+      Array(names).collect { |name| RbVmomi::VIM.SelectionSpec(:name => name) } if names
+    end
+
+    def traversal_spec(name, type, path, selectSet = nil)
+      RbVmomi::VIM.TraversalSpec(:name => name, :type => type, :path => path, :skip => true, :selectSet => selection_spec(selectSet))
+    end
+
+    def child_traversal_specs(selection_spec_names)
+      traversal_spec('tsFolder', 'Folder', 'childEntity', selection_spec_names + ['tsFolder'])
     end
   end
 end

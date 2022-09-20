@@ -1,6 +1,7 @@
 require "logger"
 require "active_support/core_ext/object/blank"
 
+require "rbvmomi2"
 require_relative "miq_queue"
 require_relative "parser"
 require_relative "persister"
@@ -54,6 +55,7 @@ class Collector
     host     = opts[:host]
     username = opts[:user]
     password = opts[:password]
+    port     = opts[:port]
 
     log.info("Connecting to #{username}@#{host}...")
 
@@ -63,7 +65,7 @@ class Collector
       :ssl      => true,
       :insecure => true,
       :path     => "/sdk",
-      :port     => 443,
+      :port     => port,
       :rev      => "6.5",
     }
 
@@ -217,6 +219,7 @@ class Collector
   def ems_options
     {
       :host     => @options[:ems_hostname],
+      :port     => @options[:ems_port],
       :user     => @options[:ems_user],
       :password => @options[:ems_password],
     }
@@ -225,7 +228,7 @@ class Collector
   def q_options
     {
       :host     => @options[:q_hostname],
-      :port     => @options[:q_port].to_i,
+      :port     => @options[:q_port],
       :username => @options[:q_user],
       :password => @options[:q_password],
     }
