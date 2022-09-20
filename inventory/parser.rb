@@ -97,6 +97,9 @@ class Parser
   end
   alias parse_vmware_distributed_virtual_switch parse_distributed_virtual_switch
 
+  def parse_storage_pod(_object, _props)
+  end
+
   def parse_folder(object, props)
     collections[:ems_folders].manager_uuids << object._ref
     return if props.nil?

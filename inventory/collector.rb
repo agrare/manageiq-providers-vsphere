@@ -67,7 +67,7 @@ class Collector
       :rev      => "6.5",
     }
 
-    require 'rbvmomi/vim'
+    require 'rbvmomi'
 
     conn = RbVmomi::VIM.new(opts).tap do |vim|
       vim.rev = vim.serviceContent.about.apiVersion

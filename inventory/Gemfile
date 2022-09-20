@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-gem "rbvmomi"
-gem "trollop"
-gem "manageiq-messaging",           :git => "https://github.com/ManageIQ/manageiq-messaging"
+gem "rbvmomi2"
+gem "optimist"
+gem "manageiq-messaging"
 gem "manageiq-providers-inventory", :git => "https://github.com/agrare/manageiq-providers-inventory"

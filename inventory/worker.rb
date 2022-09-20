@@ -1,4 +1,4 @@
-require "trollop"
+require "optimist"
 require_relative "collector"
 
 STDOUT.sync = true
@@ -25,7 +25,7 @@ def main args
 end
 
 def parse_args
-  args = Trollop.options do
+  args = Optimist.options do
     opt :ems_id,       "ems id",       :type => :int
     opt :ems_hostname, "ems hostname", :type => :string
     opt :ems_user,     "ems username", :type => :string
