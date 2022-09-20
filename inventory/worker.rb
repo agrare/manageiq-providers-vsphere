@@ -20,37 +20,31 @@ def main args
     loop { break unless thread.alive?; sleep 1 }
   rescue Interrupt
     collector.stop
+    thread.run if thread.status == "sleep"
     thread.join
   end
 end
 
 def parse_args
   args = Optimist.options do
-    opt :ems_id,       "ems id",       :type => :int
-    opt :ems_hostname, "ems hostname", :type => :string
-    opt :ems_user,     "ems username", :type => :string
+    opt :ems_id,       "ems id",       :type => :integer, :default => ENV["EMS_ID"]&.to_i
+    opt :ems_hostname, "ems hostname", :type => :string,  :default => ENV["EMS_HOSTNAME"]
+    opt :ems_user,     "ems username", :type => :string,  :default => ENV["EMS_USERNAME"]
     opt :ems_password, "ems password", :type => :string
+    opt :ems_ssl,      "ems ssl",      :type => :boolean, :default => true
+    opt :ems_port,     "ems port",     :type => :integer, :default => ENV["EMS_PORT"]&.to_i || 443
 
-    opt :q_hostname, "queue hostname", :type => :string
-    opt :q_port,     "queue port",     :type => :integer
-    opt :q_user,     "queue username", :type => :string
+    opt :q_hostname, "queue hostname", :type => :string,  :default => ENV["QUEUE_HOSTNAME"] || "localhost" 
+    opt :q_port,     "queue port",     :type => :integer, :default => ENV["QUEUE_PORT"]&.to_i || 61616
+    opt :q_user,     "queue username", :type => :string,  :default => ENV["QUEUE_USER"] || "admin"
     opt :q_password, "queue password", :type => :string
   end
 
-  args[:ems_id]       ||= ENV["EMS_ID"]
-  args[:ems_hostname] ||= ENV["EMS_HOSTNAME"]
-  args[:ems_user]     ||= ENV["EMS_USERNAME"]
   args[:ems_password] ||= ENV["EMS_PASSWORD"]
-
-  args[:q_hostname]   ||= ENV["QUEUE_HOSTNAME"] || "localhost"
-  args[:q_port]       ||= ENV["QUEUE_PORT"]     || "61616"
-  args[:q_user]       ||= ENV["QUEUE_USER"]     || "admin"
   args[:q_password]   ||= ENV["QUEUE_PASSWORD"] || "smartvm"
 
-  args[:q_port] = args[:q_port].to_i
-
   %i(ems_id ems_hostname ems_user ems_password q_hostname q_port q_user q_password).each do |param|
-    raise Trollop::CommandlineError, "--#{param} required" if args[param].nil?
+    raise Optimist::CommandlineError, "--#{param} required" if args[param].nil?
   end
 
   args
