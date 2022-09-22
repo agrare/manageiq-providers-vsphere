@@ -1,5 +1,5 @@
 require "optimist"
-require "metrics_collector"
+require_relative "metrics_collector"
 
 STDOUT.sync = true
 Thread.abort_on_exception = true
